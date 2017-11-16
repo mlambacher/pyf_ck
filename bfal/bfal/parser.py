@@ -44,7 +44,6 @@ class Parser:
     ###  aliases as defined with the 'ALIAS' command
     self.ALIASES = {}
 
-    makros.CUR_POS = START_POS
 
 
   def parseCmdParts(self, cmd):
@@ -222,13 +221,14 @@ class Parser:
 
 
 
-  def evalCondition(self, cmdType, condition, src1, src2, dest=None, forceTemp=True):
+  def evalCondition(self, mc, cmdType, condition, src1, src2, dest=None, forceTemp=True):
     '''
     Evaluate the given condition; if true, the head will read nonzero, if false, zero.
     If the dest cell is given, the condition will be evaluated there
       - this is needed for loops etc, where the condition needs to be evaluated at the same cell before entry and inside the loop.
     If forceTemp is False, the condition can be evaluated at a non-temp cell (e.g. nonzero can be checked by just moving to the corresponding cell)
 
+    :param mc: MakroContext to run the makros in (evalCondition is not a standalone function, but called as part of compile)
     :param cmdType: type of command
     :param condition: condition to evaluate
     :param src1: first source argument (or None)
@@ -241,23 +241,23 @@ class Parser:
     if condition == CONDITIONS.NOT_ZERO:
       if cmdType == 'CR':
         if forceTemp or (dest and dest != src1):
-          if not dest: dest = makros.getClosestTemp(cell=src1)
-          cmds = makros.addCell(dest, src1) + makros.moveToCell(dest)   #addCell('CD', src1) + moveToCell('CD')
+          if not dest: dest = mc.getClosestTemp(cell=src1)
+          cmds = mc.addCell(dest, src1) + mc.moveToCell(dest)   #addCell('CD', src1) + moveToCell('CD')
 
         else:
           dest = src1
-          cmds = makros.moveToCell(dest)
+          cmds = mc.moveToCell(dest)
 
       else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
     elif condition == CONDITIONS.NOT_EQUAL:
       if cmdType == 'CRV':
-        if not dest: dest = makros.getClosestTemp(cell=src1)
-        cmds = makros.addCell(dest, src1) + makros.dec(dest, int(src2)) + makros.moveToCell(dest)
+        if not dest: dest = mc.getClosestTemp(cell=src1)
+        cmds = mc.addCell(dest, src1) + mc.dec(dest, int(src2)) + mc.moveToCell(dest)
 
       elif cmdType == 'CRR':
-        if not dest: dest = makros.getClosestTemp(cell=src1, directionCell=src2)
-        cmds = makros.addCell(dest, src1) + makros.subCell(dest, src2) + makros.moveToCell(dest)
+        if not dest: dest = mc.getClosestTemp(cell=src1, directionCell=src2)
+        cmds = mc.addCell(dest, src1) + mc.subCell(dest, src2) + mc.moveToCell(dest)
 
       else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
@@ -280,109 +280,111 @@ class Parser:
     '''
 
     bf = ''
-
     cfBlockEnds = []
-    for cmd in bfal.split('\n'):
-      try:
-        parsed = self.parseCommand(cmd)
-        if not parsed: continue
+    
+    with makros.MakroContext(START_POS) as mc:
+      for cmd in bfal.split('\n'):
+        try:
+          parsed = self.parseCommand(cmd)
+          if not parsed: continue
+        
+          cmdClass, opcode, cmdType, args = parsed
+          if cmdClass == OPCODE_CLASSES.INSTRUCTION:
+            dest, src1, src2 = args
 
-        cmdClass, opcode, cmdType, args = parsed
-        if cmdClass == OPCODE_CLASSES.INSTRUCTION:
-          dest, src1, src2 = args
+            if opcode == OPCODES.SET:
+              if cmdType == 'RV': bf += mc.atCell(dest, '[-]') + mc.setFromTo(0, int(src1), dest=dest)
+              elif cmdType == 'RR': bf += mc.copyCell(dest, src1)
 
-          if opcode == OPCODES.SET:
-            if cmdType == 'RV': bf += makros.atCell(dest, '[-]') + makros.setFromTo(0, int(src1), dest=dest)
-            elif cmdType == 'RR': bf += makros.copyCell(dest, src1)
-
-            else: raise RuntimeError('Unknown type: {}'.format(cmdType))
-
-
-          elif opcode == OPCODES.STZ: bf += makros.atCell(dest, '[-]')
-
-          elif opcode == OPCODES.INPUT: bf += makros.atCell(dest, ',')
-          elif opcode == OPCODES.OUTPUT: bf += makros.atCell(dest, '.')
+              else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
 
-          elif opcode == OPCODES.INC:
-            if   cmdType == 'R': bf += makros.inc(dest=dest)
-            elif cmdType == 'RV': bf += makros.inc(dest=dest, val=int(src1))
-            elif cmdType == 'RR': bf += makros.addCell(dest, src1)
+            elif opcode == OPCODES.STZ: bf += mc.atCell(dest, '[-]')
 
-            else: raise RuntimeError('Unknown type: {}'.format(cmdType))
+            elif opcode == OPCODES.INPUT: bf += mc.atCell(dest, ',')
+            elif opcode == OPCODES.OUTPUT: bf += mc.atCell(dest, '.')
 
 
-          elif opcode == OPCODES.DEC:
-            if   cmdType == 'R': bf += makros.dec(dest=dest)
-            elif cmdType == 'RV': bf += makros.dec(dest=dest, val=src1)
-            elif cmdType == 'RR': bf += makros.addCell(dest, src1)
+            elif opcode == OPCODES.INC:
+              if   cmdType == 'R': bf += mc.inc(dest=dest)
+              elif cmdType == 'RV': bf += mc.inc(dest=dest, val=int(src1))
+              elif cmdType == 'RR': bf += mc.addCell(dest, src1)
 
-            else: raise RuntimeError('Unknown type: {}'.format(cmdType))
-
-
-          elif opcode == OPCODES.ADD:
-            if   cmdType == 'RRV': bf += makros.copyCell(dest, src1) + makros.inc(dest, int(src2))
-            elif cmdType == 'RRR': bf += makros.copyCell(dest, src1) + makros.addCell(dest, src2)
-
-            else: raise RuntimeError('Unknown type: {}'.format(cmdType))
+              else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
 
-          elif opcode == OPCODES.SUB:
-            if cmdType == 'RRV': bf += makros.copyCell(dest, src1) + makros.dec(dest, int(src2))
-            elif cmdType == 'RRR': bf += makros.copyCell(dest, src1) + makros.subCell(dest, src2)
+            elif opcode == OPCODES.DEC:
+              if   cmdType == 'R': bf += mc.dec(dest=dest)
+              elif cmdType == 'RV': bf += mc.dec(dest=dest, val=src1)
+              elif cmdType == 'RR': bf += mc.addCell(dest, src1)
 
-            else: raise RuntimeError('Unknown type: {}'.format(cmdType))
-
-          else: raise RuntimeError('Unknown opcode: {}'.format(opcode))
-
-
-        elif cmdClass == OPCODE_CLASSES.CONTROLFLOW_START:
-          condition, src1, src2 = args
-
-          if opcode == OPCODES.WHILE:
-            dest, cmds = self.evalCondition(cmdType, condition, src1, src2, forceTemp=False)
-            bf += cmds + '['
-            if dest in TEMPS: bf += '[-]'
-
-            llaEnd = lambda args: self.evalCondition(*args[:-1], dest=args[-1], forceTemp=False)[1] + ']'
-
-          elif opcode == OPCODES.IF:
-            dest, cmds = self.evalCondition(cmdType, condition, src1, src2)
-            bf += cmds + '[[-]'
-            llaEnd = lambda args: makros.moveToCell(args[-1]) + ']'
-
-          else: raise RuntimeError('Unknown opcode: {}'.format(opcode))
-
-          args = [cmdType, condition, src1, src2, dest]
-          cfBlockEnds.append((opcode, llaEnd, args))
+              else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
 
-        elif cmdClass == OPCODE_CLASSES.CONTROLFLOW_END:
-          ends = cmdType
+            elif opcode == OPCODES.ADD:
+              if   cmdType == 'RRV': bf += mc.copyCell(dest, src1) + mc.inc(dest, int(src2))
+              elif cmdType == 'RRR': bf += mc.copyCell(dest, src1) + mc.addCell(dest, src2)
 
-          blockEnd = cfBlockEnds.pop()
-          if not blockEnd[0] in ends: raise SyntaxError('Unexpected control flow block end')
-
-          bf += blockEnd[1](blockEnd[2])
+              else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
 
-        elif cmdClass == OPCODE_CLASSES.SPECIAL:
-          arg1, arg2, arg3 = args
+            elif opcode == OPCODES.SUB:
+              if cmdType == 'RRV': bf += mc.copyCell(dest, src1) + mc.dec(dest, int(src2))
+              elif cmdType == 'RRR': bf += mc.copyCell(dest, src1) + mc.subCell(dest, src2)
 
-          if opcode == OPCODES.ALIAS: self.ALIASES[arg1] = arg2
-          elif opcode == OPCODES.PRINT: bf += makros.atTemp(makros.printText(arg1))
+              else: raise RuntimeError('Unknown type: {}'.format(cmdType))
 
-          else: raise RuntimeError('Unknown opcode: {}'.format(opcode))
-
-
-
-        else: raise RuntimeError('Unknown command class {}'.format(cmdClass))
-
-        if bf and not bf[-1] == '\n': bf += '\n'
+            else: raise RuntimeError('Unknown opcode: {}'.format(opcode))
 
 
-      except (NameError, ValueError, IndexError, TypeError, SyntaxError, RuntimeError) as err:
-        print('Error while parsing command "{}":\n\t{}'.format(cmd, err))
-        sys.exit()
+          elif cmdClass == OPCODE_CLASSES.CONTROLFLOW_START:
+            condition, src1, src2 = args
+
+            if opcode == OPCODES.WHILE:
+              dest, cmds = self.evalCondition(mc, cmdType, condition, src1, src2, forceTemp=False)
+              bf += cmds + '['
+              if dest in TEMPS: bf += '[-]'
+
+              llaEnd = lambda args: self.evalCondition(mc, *args[:-1], dest=args[-1], forceTemp=False)[1] + ']'
+
+            elif opcode == OPCODES.IF:
+              dest, cmds = self.evalCondition(mc, cmdType, condition, src1, src2)
+              bf += cmds + '[[-]'
+              llaEnd = lambda args: mc.moveToCell(args[-1]) + ']'
+
+            else: raise RuntimeError('Unknown opcode: {}'.format(opcode))
+
+            args = [cmdType, condition, src1, src2, dest]
+            cfBlockEnds.append((opcode, llaEnd, args))
+
+
+          elif cmdClass == OPCODE_CLASSES.CONTROLFLOW_END:
+            ends = cmdType
+
+            blockEnd = cfBlockEnds.pop()
+            if not blockEnd[0] in ends: raise SyntaxError('Unexpected control flow block end')
+
+            bf += blockEnd[1](blockEnd[2])
+
+
+          elif cmdClass == OPCODE_CLASSES.SPECIAL:
+            arg1, arg2, arg3 = args
+
+            if opcode == OPCODES.ALIAS: self.ALIASES[arg1] = arg2
+            elif opcode == OPCODES.PRINT: bf += mc.atTemp(mc.printText(arg1))
+
+            else: raise RuntimeError('Unknown opcode: {}'.format(opcode))
+
+
+
+          else: raise RuntimeError('Unknown command class {}'.format(cmdClass))
+
+          if bf and not bf[-1] == '\n': bf += '\n'
+
+        
+
+        except (NameError, ValueError, IndexError, TypeError, SyntaxError, RuntimeError) as err:
+          print('Error while parsing command "{}":\n\t{}'.format(cmd, err))
+          sys.exit()
 
     return bf
