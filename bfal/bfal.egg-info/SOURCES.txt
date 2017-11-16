@@ -1,0 +1,11 @@
+README
+setup.py
+bfal/__init__.py
+bfal/makros.py
+bfal/memoryLayout.py
+bfal/opcodes.py
+bfal/parser.py
+bfal.egg-info/PKG-INFO
+bfal.egg-info/SOURCES.txt
+bfal.egg-info/dependency_links.txt
+bfal.egg-info/top_level.txt
