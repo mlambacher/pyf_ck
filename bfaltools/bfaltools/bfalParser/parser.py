@@ -8,34 +8,12 @@ The Parser is the main class to convert BFAL code to brainfuck.
 Marius Lambacher, 2017
 '''
 
-from .memoryLayout import *
-from .opcodes import *
-import bfal.makros as makros
-
 import sys
 
-
-def litStrToInt(s):
-  '''
-  String to int conversion. Accepts literals '0b' for binary and '0x' for hexadecimal (and none for decimal).
-
-  :param s: string to convert
-  :return: converted int
-  '''
-
-  try:
-    if s[:2] == '0b':
-      i = int(s[2:], 2)
-    elif s[:2] == '0x':
-      i = int(s[2:], 16)
-    else:
-      i = int(s)
-
-    return i
-
-  except ValueError:
-    raise ValueError('Cannot parse to int: {}'.format(s))
-
+from ..util import *
+from . import makros
+from .memoryLayout import REGISTERS, TEMPS, START_POS
+from .opcodes import *
 
 
 
@@ -44,12 +22,10 @@ class Parser:
     ###  aliases as defined with the 'ALIAS' command
     self.ALIASES = {}
 
-
-
   def parseCmdParts(self, cmd):
     '''
     Splits a line of assembly into its parts.
-    Splitting occurs at whitespace; though blocks enclosed by quotes wil be treated as one part.
+    Splitting occurs at whitespace; though blocks enclosed by quotes will be treated as one part.
 
     :param cmd: command to split (string)
     :return: list of cmd parts
@@ -273,15 +249,16 @@ class Parser:
   def compile(self, bfal):
     '''
     Parses the given assembly to brainfuck commands.
-    splits the assembly in lines / commands, parses them using parseCommand and compiles them to lla commands
+    splits the assembly in lines / commands, parses them using parseCommand and compiles them to bf commands
 
     :param bfal: assembly input
     :return: brainfuck commands
     '''
 
     bf = ''
+
     cfBlockEnds = []
-    
+    self.ALIASES = {}
     with makros.MakroContext(START_POS) as mc:
       for cmd in bfal.split('\n'):
         try:

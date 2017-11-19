@@ -1,0 +1,72 @@
+Brainfuck Assembly Language implementation.
+
+This implements a simple assembly language, which can be compiled to brainfuck code.
+
+Compilation is achieved in three steps:
+  - compiling the assembly to a low level assembly (lla) language; consisting of simple instructions and no control flow
+  - translating the low level assembly to brainfuck code;
+    this is achieved by only using simple string replacements and resolving the OPC[n] syntax (gets replaced by n instances of OPC)
+
+
+The Assembler works on 8 registers R0..7, each being 8bit wide.
+
+Immediate sources are 8bit values, they can be given as a litString (0b10010, 0x12, 18)
+Comments start with //
+
+
+
+Instructions:
+Instructions are of form <opcode> <destination> [<source1> [<source2>]]
+They implement basic operations
+
+NOTE: In instructions which take a destination and at least one source register,
+          destination and first source can be the same; but not destination and second source!
+
+SET     <Register>    <Value>                       // stores <Value> in <Register>
+STO     <Register1>   <Register2>                   // stores <Register2> in <Register1>
+
+STZ     <Register>                                  // sets the register to 0
+
+INP     <Register>                                  // reads one character and stores it in the register
+OUT     <Register>                                  // prints the register as a character
+
+INC     <Register>                                  // increments the register
+INC     <Register>    <Value>                       // increments <Register> by <Value>
+INC     <Register1>   <Register2>                   // increments <Register1> by <Register2>
+
+DEC     <Register>                                  // decrements the register
+DEC     <Register>    <Value>                       // decrements <Register> by <Value>
+DEC     <Register1>   <Register2>                   // decrements <Register1> by <Register2>
+
+ADD     <Register1>   <Register2>   <Value>         // adds <Value> to <Register2> and stores the result in <Register1>
+ADD     <Register1>   <Register2>   <Register3>     // adds <Register2> to <Register3> and stores the result in <Register1>
+
+SUB     <Register1>   <Register2>                   // increments <Register1> by <Register2>
+SUB     <Register1>   <Register2>                   // increments <Register1> by <Register2>
+
+
+Control Flow:
+Control flow statements are usually of type <Statement> <Condition>, where <Condition> is one of the conditions listed below
+They always need to be ended with their corresponding end-statements.
+
+WHILE   <Condition>      // do the following block while <Condition> is fullfilled
+... ENDWHILE
+
+IF      <Condition>     // do the following block if <Condition> is fullfilled
+...ENDIF
+
+
+Conditions:
+NZR     <Register>                    // true, if <Register> is not 0
+
+NEQ     <Register>    <Value>         // true, if <Register> is not equal to <Value>
+NEQ     <Register1>   <Register2>     // true, if <Register1> is not equal to <Register2>
+
+
+Special Opcodes:
+
+ALIAS   <Alias>       <Value/Register>          // from there on, <Alias> will be replaced by <Value/Register> in the sourcecode
+
+PRT     <Text>        // prints <Text> to screen; NOTE: to use spaces, encapsulate <Text> in quotes
+
+Marius Lambacher, 2017

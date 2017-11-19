@@ -17,7 +17,7 @@ Marius Lambacher, 2017
 '''
 
 
-from .memoryLayout import *
+from .memoryLayout import CELLS, TEMPS
 from contextlib import ContextDecorator
 
 
