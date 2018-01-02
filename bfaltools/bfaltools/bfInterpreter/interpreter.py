@@ -32,7 +32,13 @@ class Interpreter():
     self.cmdCodes = ('>', '<', '+', '-', '.', ',', '[', ']')      # recognised bf codes
 
     self.cmds = np.array([], 'U1')                                # contains the current commands to be run
-    self.init()                                                   # sets cmdPtr, jmps, memory, memoryPtr, bufferedLine
+    self.cmdPtr = 0                                               # index of current command
+
+    self.jmps = np.zeros(0, dtype='u4')                           # jumps to be made when encountering parentheses '[...]'
+    self.memory = np.zeros(self.memorySize, dtype='u1')           # memory cells
+    self.memoryPtr = 0                                            # pointer to current memory cell
+
+    self.bufferedLine = iter([])
 
 
   def setDebugging(self, debugging=True):
@@ -51,14 +57,14 @@ class Interpreter():
     for i, cmd in enumerate(self.cmds):
       if cmd == '[': addrs.append(i)
       elif cmd == ']':
-        if len(addrs) == 0: raise RuntimeError('Parentheses in source do not match (too many ]\'s)')
+        if len(addrs) == 0: raise SyntaxError('Parentheses in source do not match (too many ]\'s)')
         addr = addrs.pop()
         self.jmps[i] = addr + 1
         self.jmps[addr] = i + 1
 
-    if len(addrs) != 0: raise RuntimeError('Parentheses in source do not match (too many [\'s)')
+    if len(addrs) != 0: raise SyntaxError('Parentheses in source do not match (too many [\'s)')
 
-    self.memory = np.zeros(self.memorySize, dtype=np.uint8)         # memory cells
+    self.memory = np.zeros(self.memorySize, dtype='u1')         # memory cells
     self.memoryPtr = 0                                            # pointer to current memory cell
 
     self.bufferedLine = iter([])
@@ -144,8 +150,8 @@ class Interpreter():
 
       # handling exceptions (out of bounds memory, cell wraparound)
 
-      if self.memoryPtr < 0: raise RuntimeError('Forbidden memory access: address < 0')
-      if self.memoryPtr >= self.memorySize: raise RuntimeError('Forbidden memory access: address > memorySize ({}).'.format(self.memorySize))
+      if self.memoryPtr < 0: raise MemoryError('Forbidden memory access: address < 0')
+      if self.memoryPtr >= self.memorySize: raise MemoryError('Forbidden memory access: address > memorySize ({}).'.format(self.memorySize))
 
 
     else: self.running = False

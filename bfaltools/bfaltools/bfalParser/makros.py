@@ -173,15 +173,37 @@ class MakroContext(ContextDecorator):
     return self.moveToTemp() + cmds
 
 
-  def setToZero(self, dest):
+  def setFromTo(self, fromVal, toVal, dest=None):
     '''
-    Set given cell to 0
+    Sets a cell (or current position) from a given value to another; using increment or decrement operations
 
-    :param dest: cell to set to 0
+    :param fromVal: current value of cell
+    :param toVal: goal value of cell
+    :param dest: cell to set
     :return: brainfuck commands
     '''
 
-    return self.atCell(dest, '[-]')
+    diff = toVal - fromVal
+
+    if diff == 0: return ''
+    elif diff > 128: diff -= 256
+    elif diff < -128: diff += 256
+
+    if diff > 0: return self.inc(dest=dest, val=diff)
+    elif diff < 0: return self.dec(dest=dest, val=abs(diff))
+
+
+  def set(self, dest=None, val=0):
+    '''
+    Set given cell (or current) to val
+
+    :param dest: cell to set
+    :param val: value to set the cell to
+    :return: brainfuck commands
+    '''
+
+    if not dest: return '[-]' + self.setFromTo(0, val)
+    return self.atCell(cell=dest, cmds='[-]' + self.setFromTo(0, val))
 
 
   def inc(self, dest=None, val=1):
@@ -215,23 +237,7 @@ class MakroContext(ContextDecorator):
     else: return self.atCell(dest, cmds)
 
 
-  def setFromTo(self, fromVal, toVal, dest=None):
-    '''
-    Sets a cell (or current position) from a given value to another; using increment or decrement operations
 
-    :param fromVal: current value of cell
-    :param toVal: goal value of cell
-    :param dest: cell to decerement
-    :return: brainfuck commands
-    '''
-
-    diff = toVal - fromVal
-
-    if diff > 128: diff -= 256
-    elif diff < -128: diff += 256
-
-    if diff > 0: return self.inc(dest=dest, val=diff)
-    elif diff < 0: return self.dec(dest=dest, val=abs(diff))
 
 
   def loop(self, cmds=''):
