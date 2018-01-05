@@ -118,7 +118,7 @@ class TestBFInterpreter(unittest.TestCase):
 
     interpreter.load(',[>,]')
     interpreter.run()
-    np.testing.assert_array_equal(interpreter.memory[0:3], np.array([66, 0, 0], dtype='u8'))
+    np.testing.assert_array_equal(interpreter.memory[0:3], np.array([66, 0, 0], dtype='u1'))
 
   @patch('sys.stdin', new_callable=StringIO)
   def test_bfInterpreter_cmd_inp_buffer(self, mock_stdin):

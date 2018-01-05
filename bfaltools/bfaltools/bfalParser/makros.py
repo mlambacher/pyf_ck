@@ -301,7 +301,7 @@ class MakroContext(ContextDecorator):
     :return: brainfuck commands
     '''
 
-    if dest == source: return []
+    if dest == source: return ''
     else: return self.atCell(dest, '[-]') + self.addCell(dest, source)
 
 

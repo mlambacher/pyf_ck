@@ -12,7 +12,6 @@ For a condition, the definition is rather similar.
 The argument types are the following:
   - 'R': a register
   - 'V': a value (int, with literal)
-  - 'C': a condition (for control flow)
   - 'T': text
 
 Therefore, the opcode 'FOO' of type ('RR', 'RRV') could be called in one of the following ways:
@@ -51,6 +50,7 @@ class OPCODES(Enum):
   FALSE = 121
   NOT_ZERO = 122
   NOT_EQUAL = 123
+  GREATER = 124
 
   INPUT = 130
   OUTPUT = 131
@@ -78,6 +78,7 @@ OPCODE_IDENTIFIERS = {
   'FALSE': OPCODES.FALSE,
   'NZR': OPCODES.NOT_ZERO,
   'NEQ': OPCODES.NOT_EQUAL,
+  'GT': OPCODES.GREATER,
 
   'INP': OPCODES.INPUT,
   'OUT': OPCODES.OUTPUT,
@@ -104,7 +105,8 @@ OPCODE_TYPES = {
   OPCODES.TRUE: (OPCODE_CLASSES.INSTRUCTION, ('',)),
   OPCODES.FALSE: (OPCODE_CLASSES.INSTRUCTION, ('',)),
   OPCODES.NOT_ZERO: (OPCODE_CLASSES.INSTRUCTION, ('V', 'R')),
-  OPCODES.NOT_EQUAL: (OPCODE_CLASSES.INSTRUCTION, ('VV', 'VR', 'RV', 'RR')),
+  OPCODES.NOT_EQUAL: (OPCODE_CLASSES.INSTRUCTION, ('VV', 'RV', 'RR')),
+  OPCODES.GREATER: (OPCODE_CLASSES.INSTRUCTION, ('VV', 'RV', 'RR')),
 
   OPCODES.INPUT: (OPCODE_CLASSES.INSTRUCTION, ('R',)),
   OPCODES.OUTPUT: (OPCODE_CLASSES.INSTRUCTION, ('R',)),

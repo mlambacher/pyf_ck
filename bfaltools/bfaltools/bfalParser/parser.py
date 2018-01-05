@@ -29,6 +29,7 @@ class Parser:
 
     self.REGISTERS = memoryLayout.REGISTERS
     self.TEMPS = memoryLayout.TEMPS
+    self.CELLS = memoryLayout.CELLS
     self.START_POS = memoryLayout.START_POS
 
 
@@ -236,8 +237,8 @@ class Parser:
 
             elif opcode == self.OPCODES.DEC:
               if   cmdType == 'R': bf += mc.dec(dest=arg1)
-              elif cmdType == 'RV': bf += mc.dec(dest=arg1, val=arg2)
-              elif cmdType == 'RR': bf += mc.addCell(arg1, arg2)
+              elif cmdType == 'RV': bf += mc.dec(dest=arg1, val=int(arg2))
+              elif cmdType == 'RR': bf += mc.subCell(arg1, arg2)
 
               else: raise UnknownCmdTypeError(cmdType)
 
@@ -278,20 +279,36 @@ class Parser:
             elif opcode == self.OPCODES.NOT_EQUAL:
               if cmdType == 'VV':
                 bf += mc.set('RC', 0)
-                if int(arg1) == int(arg2):
+                if int(arg1) != int(arg2):
                   bf += '+'
 
-              if cmdType == 'RV':
+              elif cmdType == 'RV':
                 bf += mc.set('RC', 0)
                 bf += mc.addCell('RC', arg1) + mc.dec('RC', int(arg2))
 
-              if cmdType == 'VR':
+              elif cmdType == 'RR':
                 bf += mc.set('RC', 0)
-                bf += mc.addCell('RC', arg2) + mc.dec('RC', int(arg1))
+                if arg1 != arg2: bf += mc.addCell('RC', arg1) + mc.subCell('RC', arg2)    # if registers are equal, their values are -> NEQ is false
+
+            elif opcode == self.OPCODES.GREATER:
+              if cmdType == 'VV':
+                bf += mc.set('RC', 0)
+                if int(arg1) < int(arg2):
+                  bf += '+'
+
+              elif cmdType == 'RV':
+                bf += mc.set('RC', 0)
+                bf += mc.addCell('RC', arg1) + mc.dec('RC', int(arg2))
 
               elif cmdType == 'RR':
                 bf += mc.set('RC', 0)
-                bf += mc.addCell('RC', arg1) + mc.subCell('RC', arg2)
+                if arg1 != arg2:     # if registers are equal, their values are -> LS is false
+                  tx = mc.getClosestTemp('RC')
+                  ty = mc.getClosestTemp('RC', omit=(tx,))
+                  t = mc.getClosestTemp('RC', omit=(tx, ty))
+
+                  bf += mc.set('RC', 0)
+                  bf += mc.copyCell(tx, arg1)
 
               else: raise UnknownCmdTypeError(cmdType)
               bf += mc.moveToCell('RC')
@@ -322,14 +339,6 @@ class Parser:
               bf += mc.set('RC', 0) + ']'
 
             else: raise UnknownOpcodeError(opcode)
-
-            # ends = cmdType
-            #
-            # blockEnd = cfBlockEnds.pop()
-            # if not blockEnd[0] in ends: raise SyntaxError('Unexpected control flow block end')
-            #
-            # bf += blockEnd[1](blockEnd[2])
-
 
           elif cmdClass == self.OPCODE_CLASSES.SPECIAL:
             arg1, arg2, arg3 = args

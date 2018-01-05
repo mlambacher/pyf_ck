@@ -14,19 +14,21 @@ Marius Lambacher, 2017
 import numpy as np
 
 class Interpreter():
-  def __init__(self, memorySize=30000, bufferInput=True):
+  def __init__(self, memorySize=30000, bufferInput=True, debugging=False):
     """
     Creates a new brainfuck interpreter
 
     :param dataSize: size of the memory field
     :param bufferInput: If True, a line of input is buffered and then delivered to bf character-wise.
                         If the buffer is empty, a new line of input is requested
+
+    :param debugging: enable debugging mode from start
     """
 
     self.memorySize = memorySize
     self.bufferInput = bufferInput
 
-    self.debugging = False
+    self.debugging = debugging
     self.running = False
 
     self.cmdCodes = ('>', '<', '+', '-', '.', ',', '[', ']')      # recognised bf codes
@@ -47,9 +49,8 @@ class Interpreter():
   def init(self):
     """
     Initialises the interpreter; called before running code.
-
-    :return:
     """
+
     self.cmdPtr = 0                                               # index of current command
 
     self.jmps = np.zeros(self.cmds.size, dtype='u4')              # jumps to be made when encountering parentheses '[...]'
@@ -82,11 +83,10 @@ class Interpreter():
     for c in source:
       if c in self.cmdCodes: cmdStr += c
 
-    cmdStr = cmdStr.replace('[-]', '0')
+    cmdStr = cmdStr.replace('[-]', '0')     # additional operations understood by the interpreter
     cmdStr = cmdStr.replace('[+]', '0')
 
     self.cmds = np.array(list(cmdStr), dtype='U1')
-    self.init()
 
 
   def run(self):

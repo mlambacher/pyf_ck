@@ -1,6 +1,8 @@
 """
 Tests for the bfalParser module
 
+They test general functionality, independent of the opcodes & memory layout
+
 Marius Lambacher, 2017
 """
 
