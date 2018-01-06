@@ -527,7 +527,7 @@ class TestOpcodes(TestCase):
     @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
     def GREATER_VV(self, memory, val0, val1):
       self.runBfal('LE {} {}'.format(val0, val1), memory)
-      if not val0 < val1: self.assertRegisterEqual(memory, 'RC', val=0)
+      if not val0 <= val1: self.assertRegisterEqual(memory, 'RC', val=0)
       else: self.assertRegisterNotEqual(memory, 'RC', val=0)
 
     self.zerosTest(GREATER_VV)
@@ -559,7 +559,7 @@ class TestOpcodes(TestCase):
       self.setCell(reg0, val0, m)
       self.setCell(reg1, val1, m)
       self.runBfal('LE {} {}'.format(reg0, reg1), m)
-      if (reg0 == reg1) or (not val0 <= val1): self.assertRegisterEqual(m, 'RC', val=0, compInit=True)
+      if (reg0 != reg1) and (not val0 <= val1): self.assertRegisterEqual(m, 'RC', val=0, compInit=True)
       else: self.assertRegisterNotEqual(m, 'RC', val=0, compInit=True)
 
     self.zerosTest(LESSEQUAL_RR)

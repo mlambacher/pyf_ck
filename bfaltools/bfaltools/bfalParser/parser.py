@@ -6,7 +6,7 @@ The Parser is the main class to convert BFAL code to brainfuck.
 
 Marius Lambacher, 2017
 '''
-
+import re
 import sys
 
 from ..util import *
@@ -188,6 +188,43 @@ class Parser:
 
 
 
+  def postProcess(self, bf):
+    """Clean up some minor things, e.g. unnecessary moves ('>>><<' -> '>') or STZ-sequences; both should not happen though!"""
+
+    bfOrg = bf[:]
+
+    r = re.compile('((\[-\])+\s*)+')
+    match = r.search(bf)
+    if match:
+      while 1:
+        start, end = match.span()
+        ws = match.group().strip('[-]')
+        bf = bf[:start] + '[-]' + ws + bf[end:]
+        matches = r.finditer(bf)
+        for m in matches:
+          if m.start() > end:
+            match = m
+            break
+        else: break
+
+
+    r = re.compile('(<+>+|>+<+)+')
+    match = r.search(bf)
+    while match is not None:
+      s = match.group()
+      nl = s.count('<')
+      nr = s.count('>')
+
+      diff = nr-nl
+      if diff < 0: s = '<' * abs(diff)
+      else: s = '>' * diff
+
+      bf = bf[:match.start()] + s + bf[match.end():]
+      match = r.search(bf)
+
+    #if bfOrg != bf: print(bfOrg)
+
+    return bfOrg
 
 
   ### parsing functions
@@ -327,36 +364,39 @@ class Parser:
             elif opcode == self.OPCODES.LESSEQUAL:
               if cmdType == 'VV':
                 bf += mc.set('RC', 0)
-                if int(arg1) < int(arg2):
+                if int(arg1) <= int(arg2):
                   bf += '+'
 
               elif cmdType == 'RV':
-                pass
-
-              elif cmdType == 'RR':
-                if not self.compInit:
-                  self.compInit = True
-                  if bf.startswith('>>'): bf = '>>+' + bf[2:]
-                  elif bf.startswith('>'): bf = '>>+<' + bf[1:]
-                  else: bf = '>>+<<' + bf
+                bf = self._ensureInit(bf)
 
                 bf += mc.set('RC', 0)
-                if arg1 != arg2:     # if registers are equal, their values are -> GT is false
+                bf += mc.inc('RC')
+                bf += mc.addCell('CA', arg1)
+                bf += mc.set('CB', int(arg2))
+                bf += mc.moveToCell('CA')
+                bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
+                bf += mc.set('CB', 0)
+
+
+              elif cmdType == 'RR':
+                bf = self._ensureInit(bf)
+
+                bf += mc.set('RC', 0)
+                if arg1 != arg2:
                   bf += mc.inc('RC')
-                  bf += mc.copyCell('CA', arg1)
-                  bf += mc.copyCell('CB', arg2)
+                  bf += mc.addCell('CA', arg1)
+                  bf += mc.addCell('CB', arg2)
                   bf += mc.moveToCell('CA')
                   bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
                   bf += mc.set('CB', 0)
 
-
-
+                else: bf += mc.inc()  # if registers are equal, their values are -> LE is True
 
               else: raise UnknownCmdTypeError(cmdType)
               bf += mc.moveToCell('RC')
 
             else: raise UnknownOpcodeError(opcode)
-
 
 
           elif cmdClass == self.OPCODE_CLASSES.CONTROLFLOW_START:
@@ -396,7 +436,6 @@ class Parser:
           if bf and not bf[-1] == '\n': bf += '\n'
 
         except (AssemblyError, InternalError, Exception) as err:
-          msg = ''
           if isinstance(err, AssemblyError):
             msg = 'Error while parsing the command "{}":\n\t{}: {}'.format(cmd, err.name, err)
             print(msg)
@@ -409,5 +448,20 @@ class Parser:
           print(msg)
           raise err
 
+    return self.postProcess(bf)
+
+
+
+  def _ensureInit(self, bf):
+    """Ensures that the compare section is initialised"""
+
+    if not self.compInit:
+      self.compInit = True
+
+      if bf.startswith('>>'): bf = '>>+' + bf[2:]
+      elif bf.startswith('>'): bf = '>>+<' + bf[1:]
+      else: bf = '>>+<<' + bf
 
     return bf
+
+

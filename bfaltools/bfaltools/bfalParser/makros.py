@@ -337,3 +337,7 @@ class MakroContext(ContextDecorator):
     cmds += '[-]'
 
     return cmds
+
+  def withCompareInit(self, bf):
+    """Adds the initialisation of the compare registers to bf"""
+
