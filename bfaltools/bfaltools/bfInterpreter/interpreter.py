@@ -14,13 +14,16 @@ Marius Lambacher, 2017
 import numpy as np
 
 class Interpreter():
-  def __init__(self, memorySize=30000, bufferInput=True, debugging=False):
+  def __init__(self, memorySize=30000, bufferInput=True, debugging=False, createTrace=False, traceWidth=-1):
     """
     Creates a new brainfuck interpreter
 
     :param dataSize: size of the memory field
     :param bufferInput: If True, a line of input is buffered and then delivered to bf character-wise.
                         If the buffer is empty, a new line of input is requested
+
+    :param createTrace: If True, store a history of executed opcodes and internal memory in self.trace
+    :param traceWidth: Number of cells to store in trace; if <0, store all
 
     :param debugging: enable debugging mode from start
     """
@@ -30,6 +33,10 @@ class Interpreter():
 
     self.debugging = debugging
     self.running = False
+
+    self.tracing = createTrace
+    self.traceWidth = traceWidth
+    self.trace = ''
 
     self.cmdCodes = ('>', '<', '+', '-', '.', ',', '[', ']')      # recognised bf codes
 
@@ -42,9 +49,6 @@ class Interpreter():
 
     self.bufferedLine = iter([])
 
-
-  def setDebugging(self, debugging=True):
-    self.debugging = debugging
 
   def init(self):
     """
@@ -105,17 +109,29 @@ class Interpreter():
 
 
   def step(self):
-    """
-    If the debugger is running and debugging mode is active, this will perform a single step (command).
-
-    :return:
-    """
+    """If the debugger is running and debugging mode is active, this will perform a single step (command)."""
 
     if self.running and self.debugging: self._step()
 
+
+  def _trace(self, cmd):
+    if self.traceWidth > 0: cells = self.memory[:self.traceWidth+1]
+    else: cells = self.memory
+
+    line = ''
+    line += cmd + '  '
+    line += ' '.join(map(lambda x: '{:>3}'.format(x), cells)) + '\n'
+    if self.memoryPtr <= self.traceWidth:
+      index = 6 + 4*self.memoryPtr
+      line = line[:index] + '.' + line[index+1:]
+
+    self.trace += line
+
+
   def _step(self):
     if self.cmdPtr < self.cmds.size:
-      cmd = self.cmds[self.cmdPtr]                  # fetching and executing the command
+      cmd = self.cmds[self.cmdPtr]
+      if self.tracing: self._trace(cmd)
 
       if   cmd == '[' and self.memory[self.memoryPtr] == 0: self.cmdPtr = self.jmps[self.cmdPtr]
       elif cmd == ']' and self.memory[self.memoryPtr] != 0: self.cmdPtr = self.jmps[self.cmdPtr]
@@ -155,6 +171,8 @@ class Interpreter():
 
 
     else: self.running = False
+
+
 
 
 

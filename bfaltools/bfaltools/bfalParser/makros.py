@@ -41,7 +41,7 @@ class MakroContext(ContextDecorator):
 
     :param cmds: command to be repeated
     :param repeats: number of repeats
-    :return: lla command
+    :return: bf command
     '''
 
     if repeats < 0: raise RuntimeError('Internal error, trying to repeat a negative number of times')
@@ -154,23 +154,25 @@ class MakroContext(ContextDecorator):
     return temp
 
 
-  def moveToTemp(self):
+  def moveToTemp(self, omit=None):
     '''
     Move to closest temp cell from current position
+    :param omit: cells to omit while searching for temps
     :return: brainfuck commands
     '''
 
-    return self.moveToCell(self.getClosestTemp())
+    return self.moveToCell(self.getClosestTemp(omit=omit))
 
-  def atTemp(self, cmds=''):
+  def atTemp(self, cmds='', omit=None):
     '''
     Will move to closest temp and add cmds
 
     :param cmds: commands to execute at temp cell
+    :param omit: cells to omit while searching for temps
     :return: brainfuck commands
     '''
 
-    return self.moveToTemp() + cmds
+    return self.moveToTemp(omit=omit) + cmds
 
 
   def setFromTo(self, fromVal, toVal, dest=None):
@@ -249,60 +251,73 @@ class MakroContext(ContextDecorator):
 
     return '[{}]'.format(cmds)
 
+  
 
-  def doCellTimes(self, count, dest, cmds=''):
+  def doCellTimes(self, count, dest, cmds='', destructive=False, omit=None):
     '''
     Repeat cmds at dest as often as determined by the contents of cell count.
 
     :param count: cell which contains the number of repeats
     :param dest: cell to run the commands at
     :param cmds: cmds to be repeated
+    :param destructive: if True, count will be set to 0 (faster, no temps required)
+    :param omit: cells to omit while searching for temps
     :return: brainfuck commands
     '''
 
-    temp = self.getClosestTemp(dest, count)
+    if destructive:
+      bf = self.moveToCell(count) + self.loop('-' + self.atCell(dest, cmds) + self.moveToCell(count))
 
-    lla = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + self.atCell(dest, cmds) + self.moveToCell(count))
-    lla += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
+    else:
+      temp = self.getClosestTemp(dest, count, omit=omit)
 
-    return lla
+      bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + self.atCell(dest, cmds) + self.moveToCell(count))
+      bf += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
+
+    return bf
 
 
-  def addCell(self, dest, source):
+  def addCell(self, dest, source, destructive=False, omit=None):
     '''
     Add contents of source to dest.
 
     :param dest: destination to be added to
     :param source: cell to be added to dest
+    :param destructive: if True, source will be set to 0 (faster, no temps required)
+    :param omit: cells to omit while searching for temps
     :return: brainfuck commands
     '''
 
-    return self.doCellTimes(source, dest, self.inc())
+    return self.doCellTimes(source, dest, self.inc(), destructive=destructive, omit=omit)
 
 
-  def subCell(self, dest, source):
+  def subCell(self, dest, source, destructive=False, omit=None):
     '''
     Subtractcontents of source from dest.
 
     :param dest: destination to be subtracted from
     :param source: cell to be subtracted from dest
+    :param destructive: if True, source will be set to 0 (faster, no temps required)
+    :param omit: cells to omit while searching for temps
     :return: brainfuck commands
     '''
 
-    return self.doCellTimes(source, dest, self.dec())
+    return self.doCellTimes(source, dest, self.dec(), destructive=destructive, omit=omit)
 
 
-  def copyCell(self, dest, source):
+  def copyCell(self, dest, source, destructive=False, omit=None):
     '''
     Copies content of source to dest
 
     :param dest: cell to be copied to
     :param source: cell to be copied
+    :param destructive: if True, source will be set to 0 (faster, no temps required)
+    :param omit: cells to omit while searching for temps
     :return: brainfuck commands
     '''
 
     if dest == source: return ''
-    else: return self.atCell(dest, '[-]') + self.addCell(dest, source)
+    else: return self.atCell(dest, '[-]') + self.addCell(dest, source, destructive=destructive, omit=omit)
 
 
   def printText(self, text):

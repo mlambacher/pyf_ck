@@ -54,7 +54,7 @@ class TestBFInterpreter(unittest.TestCase):
     self.assertEqual(self.interpreter.running, False)
 
   def test_bfInterpreter_run_debug(self):
-    self.interpreter.setDebugging(True)
+    self.interpreter.debugging = True
 
     self.runCmds('')
     self.assertEqual(self.interpreter.running, True)
@@ -62,7 +62,7 @@ class TestBFInterpreter(unittest.TestCase):
     self.interpreter.step()
     self.assertEqual(self.interpreter.running, False)
 
-    self.interpreter.setDebugging(False)
+    self.interpreter.debugging = False
 
   def test_bfInterpreter_cmd_mvl(self):
     self.runCmds('>>>>')

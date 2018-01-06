@@ -293,7 +293,7 @@ class Parser:
             elif opcode == self.OPCODES.GREATER:
               if cmdType == 'VV':
                 bf += mc.set('RC', 0)
-                if int(arg1) < int(arg2):
+                if int(arg1) > int(arg2):
                   bf += '+'
 
               elif cmdType == 'RV':
@@ -302,13 +302,21 @@ class Parser:
 
               elif cmdType == 'RR':
                 bf += mc.set('RC', 0)
-                if arg1 != arg2:     # if registers are equal, their values are -> LS is false
+                if arg1 != arg2:     # if registers are equal, their values are -> GT is false
                   tx = mc.getClosestTemp('RC')
-                  ty = mc.getClosestTemp('RC', omit=(tx,))
-                  t = mc.getClosestTemp('RC', omit=(tx, ty))
+                  ty = mc.getClosestTemp('RC', omit=[tx,])
+                  tflag = mc.getClosestTemp('RC', omit=[tx, ty])
+                  trest = mc.getClosestTemp('RC', omit=[tx, ty, tflag])
 
-                  bf += mc.set('RC', 0)
-                  bf += mc.copyCell(tx, arg1)
+                  bf += mc.moveToCell(arg1) + '['
+                  bf += mc.inc(tflag)
+                  bf += mc.moveToCell(arg2) + mc.loop(mc.dec()+ mc.set(tflag, 0) + mc.inc(trest) + mc.moveToCell(arg2))
+                  bf += mc.addCell(arg2, trest, destructive=True)
+                  bf += mc.addCell('RC', tflag, destructive=True)
+                  bf += mc.dec(arg2) + mc.inc(tx) + mc.dec(arg1) + ']'
+                  bf +=  mc.moveToCell(tx) + mc.loop(mc.dec()+ mc.inc(arg1) + mc.inc(arg2) + mc.moveToCell(tx))
+                  bf += mc.moveToCell('RC')
+
 
               else: raise UnknownCmdTypeError(cmdType)
               bf += mc.moveToCell('RC')

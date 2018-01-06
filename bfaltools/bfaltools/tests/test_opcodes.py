@@ -5,8 +5,7 @@ Separated from general tests of bfParser, so those can be independent of opcodes
 
 Marius Lambacher, 2017
 """
-
-
+import random
 from unittest import TestCase, skip
 from unittest.mock import patch
 
@@ -78,14 +77,17 @@ class TestOpcodes(TestCase):
         combinations = itertools.product(testRegisters, repeat=nDim)
         argNames = ['reg{}'.format(i) for i in range(nDim)]
         for c in combinations:
-          key = 'TestCount_for_{}'.format(test.__name__)
-          if key in self.__dict__: self.__dict__[key] = 0
+          if resetCount:
+            key = 'TestCount_for_{}'.format(test.__name__)
+            print(key)
+            if key in self.__dict__: self.__dict__[key] = 0
 
           if nDim == 1: regArgs = {'reg': c[0]}
           else: regArgs = dict(zip(argNames, c))
           #print(test.__name__, regArgs)
           test(self, **regArgs, **kwargs)
 
+      testDecorated.__name__ = test.__name__
       return testDecorated
     return testDecorator
 
@@ -99,7 +101,6 @@ class TestOpcodes(TestCase):
       def testDecorated(self, **kwargs):
         key = 'TestCount_for_{}'.format(test.__name__)
         if not key in self.__dict__: self.__dict__[key] = 0
-        else: self.__dict__[key] += 1
 
         valArgs = {}
         if len(expr) > 1:
@@ -110,7 +111,9 @@ class TestOpcodes(TestCase):
           valArgs['val'] = expr[0](self.__dict__[key])
 
         test(self, **valArgs, **kwargs)
+        self.__dict__[key] += 1
 
+      testDecorated.__name__ = test.__name__
       return testDecorated
     return testDecorator
 
@@ -123,6 +126,7 @@ class TestOpcodes(TestCase):
         for i in range(n):
           test(self, **kwargs)
 
+      testDecorated.__name__ = test.__name__
       return testDecorated
     return testDecorator
 
@@ -147,6 +151,7 @@ class TestOpcodes(TestCase):
 
         if regs.count(regs[0]) != len(regs): test(self, **kwargs)
 
+      testDecorated.__name__ = test.__name__
       return testDecorated
     return testDecorator
 
@@ -225,118 +230,118 @@ class TestOpcodes(TestCase):
   def test_opcodes_SET_RV(self):
     @self.atTestRegisters()
     @self.withTestValues(lambda i: i**2)
-    def test(self, memory, reg, val):
+    def SET_RV(self, memory, reg, val):
       self.runBfal('SET {} {}'.format(reg, val), memory)
       self.assertRegisterEqual(memory, reg, val=val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(SET_RV)
+    self.nonzerosTest(SET_RV)
 
   def test_opcodes_SET_RR(self):
     @self.atTestRegisters(nDim=2)
     @self.withTestValues(lambda i: i**2)
-    def test(self, memory, reg0, reg1, val):
+    def SET_RR(self, memory, reg0, reg1, val):
       m = memory.copy()
       self.setCell(reg1, val, m)
       self.runBfal('SET {} {}'.format(reg0, reg1), m)
       self.assertRegisterEqual(m, reg0, val=val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(SET_RR)
+    self.nonzerosTest(SET_RR)
 
 
   def test_opcodes_STZ_R(self):
     @self.atTestRegisters()
-    def test(self, memory, reg):
+    def STZ_R(self, memory, reg):
       self.runBfal('STZ {}'.format(reg), memory)
       self.assertRegisterEqual(memory, reg, val=0)
 
-    self.nonzerosTest(test)
+    self.nonzerosTest(STZ_R)
 
 
   def test_opcodes_INC_R(self):
     @self.atTestRegisters()
-    def test(self, memory, reg):
+    def INC_R(self, memory, reg):
       self.runBfal('INC {}'.format(reg), memory)
       self.assertRegisterEqual(memory, reg, expr=lambda v: v + 1)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(INC_R)
+    self.nonzerosTest(INC_R)
 
 
   def test_opcodes_INC_RV(self):
     @self.atTestRegisters()
     @self.withTestValues(lambda i: i**2)
-    def test(self, memory, reg, val):
+    def INC_RV(self, memory, reg, val):
       self.runBfal('INC {} {}'.format(reg, val), memory)
       self.assertRegisterEqual(memory, reg, expr=lambda v: v + val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(INC_RV)
+    self.nonzerosTest(INC_RV)
 
   def test_opcodes_INC_RR(self):
     @self.atTestRegisters(nDim=2)
     @self.withTestValues(lambda i: i**2)
     @self.skipEqualRegisters()
-    def test(self, memory, reg0, reg1, val):
+    def INC_RR(self, memory, reg0, reg1, val):
       m = memory.copy()
       self.setCell(reg1, val, m)
       self.runBfal('INC {} {}'.format(reg0, reg1), m)
       self.assertRegisterEqual(m, reg0, expr=lambda v: v+val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(INC_RR)
+    self.nonzerosTest(INC_RR)
 
   def test_opcodes_DEC_R(self):
     @self.atTestRegisters()
-    def test(self, memory, reg):
+    def DEC_R(self, memory, reg):
       self.runBfal('DEC {}'.format(reg), memory)
       self.assertRegisterEqual(memory, reg, expr=lambda v: v-1)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(DEC_R)
+    self.nonzerosTest(DEC_R)
 
 
   def test_opcodes_DEC_RV(self):
     @self.atTestRegisters()
     @self.withTestValues(lambda i: i**2)
-    def test(self, memory, reg, val):
+    def DEC_RV(self, memory, reg, val):
       self.runBfal('DEC {} {}'.format(reg, val), memory)
       self.assertRegisterEqual(memory, reg, expr=lambda v: v-val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(DEC_RV)
+    self.nonzerosTest(DEC_RV)
 
   def test_opcodes_DEC_RR(self):
     @self.atTestRegisters(nDim=2)
     @self.withTestValues(lambda i: i**2)
     @self.skipEqualRegisters()
-    def test(self, memory, reg0, reg1, val):
+    def DEC_RR(self, memory, reg0, reg1, val):
       m = memory.copy()
       self.setCell(reg1, val, m)
       self.runBfal('DEC {} {}'.format(reg0, reg1), m)
       self.assertRegisterEqual(m, reg0, expr=lambda v: v-val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(DEC_RR)
+    self.nonzerosTest(DEC_RR)
 
   def test_opcodes_ADD_RRV(self):
     @self.atTestRegisters(nDim=2)
     @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
-    def test(self, memory, reg0, reg1, val0, val1):
+    def ADD_RRV(self, memory, reg0, reg1, val0, val1):
       m = memory.copy()
       self.setCell(reg1, val0, m)
       self.runBfal('ADD {} {} {}'.format(reg0, reg1, val1), m)
       self.assertRegisterEqual(m, reg0, val=val0+val1)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(ADD_RRV)
+    self.nonzerosTest(ADD_RRV)
 
   def test_opcodes_ADD_RRR(self):
     @self.atTestRegisters(nDim=3, nRegs=3)
     @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
     @self.skipEqualRegisters(0, 2)
-    def test(self, memory, reg0, reg1, reg2, val0, val1):
+    def ADD_RRR(self, memory, reg0, reg1, reg2, val0, val1):
       if reg1 == reg2: val1 = val0
 
       m = memory.copy()
@@ -345,28 +350,28 @@ class TestOpcodes(TestCase):
       self.runBfal('ADD {} {} {}'.format(reg0, reg1, reg2), m)
       self.assertRegisterEqual(m, reg0, val=val0+val1)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(ADD_RRR)
+    self.nonzerosTest(ADD_RRR)
 
 
   def test_opcodes_SUB_RRV(self):
     @self.atTestRegisters(nDim=2)
     @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
-    def test(self, memory, reg0, reg1, val0, val1):
+    def SUB_RRV(self, memory, reg0, reg1, val0, val1):
       m = memory.copy()
       self.setCell(reg1, val0, m)
       self.runBfal('SUB {} {} {}'.format(reg0, reg1, val1), m)
       self.assertRegisterEqual(m, reg0, val=val0-val1)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(SUB_RRV)
+    self.nonzerosTest(SUB_RRV)
 
 
   def test_opcodes_SUB_RRR(self):
     @self.atTestRegisters(nDim=3, nRegs=3)
     @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
     @self.skipEqualRegisters(0, 2)
-    def test(self, memory, reg0, reg1, reg2, val0, val1):
+    def SUB_RRR(self, memory, reg0, reg1, reg2, val0, val1):
       if reg1 == reg2: val1 = val0
       m = memory.copy()
       self.setCell(reg1, val0, m)
@@ -374,87 +379,87 @@ class TestOpcodes(TestCase):
       self.runBfal('SUB {} {} {}'.format(reg0, reg1, reg2), m)
       self.assertRegisterEqual(m, reg0, val=val0-val1)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(SUB_RRR)
+    self.nonzerosTest(SUB_RRR)
 
 
   def test_opcodes_TRUE(self):
-    def test(self, memory):
+    def TRUE(self, memory):
       self.runBfal('TRUE', memory)
       self.assertRegisterNotEqual(memory, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(TRUE)
+    self.zerosTest(TRUE, rc=1)
+    self.nonzerosTest(TRUE)
 
   def test_opcodes_FALSE(self):
-    def test(self, memory):
+    def FALSE(self, memory):
       self.runBfal('FALSE', memory)
       self.assertRegisterEqual(memory, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(FALSE)
+    self.zerosTest(FALSE, rc=1)
+    self.nonzerosTest(FALSE)
 
   def test_opcodes_NOT_ZERO_V(self):
     @self.runNTimes(2)
     @self.withTestValues(lambda i: 42*(i%2))
-    def test(self, memory, val):
+    def NOT_ZERO_V(self, memory, val):
       self.runBfal('NZR {}'.format(val), memory)
       if val == 0: self.assertRegisterEqual(memory, 'RC', val=0)
       else: self.assertRegisterNotEqual(memory, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(NOT_ZERO_V)
+    self.zerosTest(NOT_ZERO_V, rc=1)
+    self.nonzerosTest(NOT_ZERO_V)
 
   def test_opcodes_NOT_ZERO_R(self):
     @self.atTestRegisters(resetCount=True)
     @self.runNTimes(2)
     @self.withTestValues(lambda i: 42*(i%2))
-    def test(self, memory, reg, val):
+    def NOT_ZERO_R(self, memory, reg, val):
       m = memory.copy()
       self.setCell(reg, val, m)
       self.runBfal('NZR {}'.format(val), m)
       if val == 0: self.assertRegisterEqual(m, 'RC', val=0)
       else: self.assertRegisterNotEqual(m, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(NOT_ZERO_R)
+    self.zerosTest(NOT_ZERO_R, rc=1)
+    self.nonzerosTest(NOT_ZERO_R)
 
   def test_opcodes_NOT_EQUAL_VV(self):
     @self.runNTimes(4)
     @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
-    def test(self, memory, val0, val1):
+    def NOT_EQUAL_VV(self, memory, val0, val1):
       self.runBfal('NEQ {} {}'.format(val0, val1), memory)
       if val0 == val1: self.assertRegisterEqual(memory, 'RC', val=0)
       else: self.assertRegisterNotEqual(memory, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(NOT_EQUAL_VV)
+    self.zerosTest(NOT_EQUAL_VV, rc=1)
+    self.nonzerosTest(NOT_EQUAL_VV)
 
   def test_opcodes_NOT_EQUAL_RV(self):
     @self.atTestRegisters(resetCount=True)
     @self.runNTimes(4)
     @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
-    def test(self, memory, reg, val0, val1):
+    def NOT_EQUAL_RV(self, memory, reg, val0, val1):
       m = memory.copy()
       self.setCell(reg, val0, m)
       self.runBfal('NEQ {} {}'.format(reg, val1), m)
       if val0 == val1: self.assertRegisterEqual(m, 'RC', val=0)
       else: self.assertRegisterNotEqual(m, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(NOT_EQUAL_RV)
+    self.zerosTest(NOT_EQUAL_RV, rc=1)
+    self.nonzerosTest(NOT_EQUAL_RV)
 
   def test_opcodes_NOT_EQUAL_RR(self):
     @self.atTestRegisters(nDim=2, nRegs=3, resetCount=True)
     @self.runNTimes(3)
     @self.withTestValues(lambda i: i+1, lambda j: ((j+1)**2)//2)
-    def test(self, memory, reg0, reg1, val0, val1):
+    def NOT_EQUAL_RR(self, memory, reg0, reg1, val0, val1):
       m = memory.copy()
       self.setCell(reg0, val0, m)
       self.setCell(reg1, val1, m)
@@ -462,15 +467,61 @@ class TestOpcodes(TestCase):
       if (reg0 == reg1) or (val0 == val1): self.assertRegisterEqual(m, 'RC', val=0)
       else: self.assertRegisterNotEqual(m, 'RC', val=0)
 
-    self.zerosTest(test)
-    self.zerosTest(test, rc=1)
-    self.nonzerosTest(test)
+    self.zerosTest(NOT_EQUAL_RR)
+    self.zerosTest(NOT_EQUAL_RR, rc=1)
+    self.nonzerosTest(NOT_EQUAL_RR)
+
+
+  def test_opcodes_GREATER_VV(self):
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
+    def GREATER_VV(self, memory, val0, val1):
+      self.runBfal('GT {} {}'.format(val0, val1), memory)
+      if val0 <= val1: self.assertRegisterEqual(memory, 'RC', val=0)
+      else: self.assertRegisterNotEqual(memory, 'RC', val=0)
+
+    self.zerosTest(GREATER_VV)
+    self.zerosTest(GREATER_VV, rc=1)
+    self.nonzerosTest(GREATER_VV)
+
+  def test_opcodes_GREATER_RV(self):
+    pass
+    # @self.atTestRegisters(resetCount=True)
+    # @self.runNTimes(4)
+    # @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
+    # def test(self, memory, reg, val0, val1):
+    #   m = memory.copy()
+    #   self.setCell(reg, val0, m)
+    #   self.runBfal('NEQ {} {}'.format(reg, val1), m)
+    #   if val0 == val1: self.assertRegisterEqual(m, 'RC', val=0)
+    #   else: self.assertRegisterNotEqual(m, 'RC', val=0)
+    #
+    # self.zerosTest(test)
+    # self.zerosTest(test, rc=1)
+    # self.nonzerosTest(test)
+
+  def test_opcodes_GREATER_RR(self):
+    @self.atTestRegisters(nDim=2, nRegs=3, resetCount=True)
+    @self.runNTimes(3)
+    @self.withTestValues(lambda i: i+1, lambda j: ((j+1)**2)//2)
+    def GREATER_RR(self, memory, reg0, reg1, val0, val1):
+      print(reg0, reg1, val0, val1)
+      m = memory.copy()
+      self.setCell(reg0, val0, m)
+      self.setCell(reg1, val1, m)
+      self.runBfal('GT {} {}'.format(reg0, reg1), m)
+      if (reg0 == reg1) or (val0 <= val1): self.assertRegisterEqual(m, 'RC', val=0)
+      else: self.assertRegisterNotEqual(m, 'RC', val=0)
+
+    self.zerosTest(GREATER_RR)
+    self.zerosTest(GREATER_RR, rc=1)
+    self.nonzerosTest(GREATER_RR)
 
 
   @patch('sys.stdin', new_callable=StringIO)
   def test_opcodes_INPUT_R(self, mock_stdin):
     @self.atTestRegisters()
-    def test(self, mock_stdin, memory, reg):
+    def INPUT_R(self, mock_stdin, memory, reg):
       string = 'B1ö'
       mock_stdin.write(string)
 
@@ -482,14 +533,14 @@ class TestOpcodes(TestCase):
         self.setCell(reg, ord(c), m)
         np.testing.assert_array_equal(self.interpreter.memory, m)
 
-    self.zerosTest(test, mock_stdin=mock_stdin)
-    self.nonzerosTest(test, mock_stdin=mock_stdin)
+    self.zerosTest(INPUT_R, mock_stdin=mock_stdin)
+    self.nonzerosTest(INPUT_R, mock_stdin=mock_stdin)
 
 
   @patch('sys.stdout', new_callable=StringIO)
   def test_opcodes_OUTPUT_R(self, mock_stdout):
     @self.atTestRegisters()
-    def test(self, mock_stdout, memory, reg):
+    def OUTPUT_R(self, mock_stdout, memory, reg):
       string = 'A0ä'
       mock_stdout.seek(0)
 
@@ -500,8 +551,8 @@ class TestOpcodes(TestCase):
 
       self.assertEqual(mock_stdout.getvalue().strip(), string)
 
-    self.zerosTest(test, mock_stdout=mock_stdout)
-    self.nonzerosTest(test, mock_stdout=mock_stdout)
+    self.zerosTest(OUTPUT_R, mock_stdout=mock_stdout)
+    self.nonzerosTest(OUTPUT_R, mock_stdout=mock_stdout)
 
 
 
@@ -509,22 +560,22 @@ class TestOpcodes(TestCase):
     @self.atTestRegisters(nDim=2, nRegs=3)
     @self.skipEqualRegisters()
     @self.withTestValues(lambda i: i*3)
-    def test(self, memory, reg0, reg1, val):
+    def LOOP(self, memory, reg0, reg1, val):
       m = memory.copy()
       self.setCell(reg0, val, m)
       self.runBfal('STZ {1}\nNZR {0}\nLOOP\nDEC {0}\nINC {1}\nNZR {0}\nENDLOOP'.format(reg0, reg1), m)
       self.setCell(reg0, 0, m)
       self.assertRegisterEqual(m, reg1, val=val)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(LOOP)
+    self.nonzerosTest(LOOP)
 
 
   def test_opcodes_IF(self):
     @self.atTestRegisters(nDim=2, nRegs=3)
     @self.skipEqualRegisters()
     @self.withTestValues(lambda i: i*3)
-    def test(self, memory, reg0, reg1, val):
+    def IF(self, memory, reg0, reg1, val):
       m = memory.copy()
       self.setCell(reg0, val, m)
       self.runBfal('SET {1} 42\nNZR {0}\nIF\nDEC {0}\nINC {1}\nENDIF'.format(reg0, reg1), m)
@@ -537,8 +588,8 @@ class TestOpcodes(TestCase):
 
       self.assertRegisterEqual(m, reg1, val=res)
 
-    self.zerosTest(test)
-    self.nonzerosTest(test)
+    self.zerosTest(IF)
+    self.nonzerosTest(IF)
 
   @skip('Already tested in test_opcodes_LOOP')
   def test_opcodes_END_LOOP(self): pass
@@ -559,7 +610,7 @@ class TestOpcodes(TestCase):
 
   @patch('sys.stdout', new_callable=StringIO)
   def test_opcodes_PRINT_T(self, mock_stdout):
-    def test(self, mock_stdout, memory):
+    def PRINT_T(self, mock_stdout, memory):
       mock_stdout.seek(0)
 
       string = 'C3ü'
@@ -568,6 +619,6 @@ class TestOpcodes(TestCase):
       np.testing.assert_array_equal(self.interpreter.memory, memory)
 
 
-    self.zerosTest(test, mock_stdout=mock_stdout)
-    self.nonzerosTest(test, mock_stdout=mock_stdout)
+    self.zerosTest(PRINT_T, mock_stdout=mock_stdout)
+    self.nonzerosTest(PRINT_T, mock_stdout=mock_stdout)
 
