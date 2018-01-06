@@ -79,7 +79,6 @@ class TestOpcodes(TestCase):
         for c in combinations:
           if resetCount:
             key = 'TestCount_for_{}'.format(test.__name__)
-            print(key)
             if key in self.__dict__: self.__dict__[key] = 0
 
           if nDim == 1: regArgs = {'reg': c[0]}
@@ -157,14 +156,14 @@ class TestOpcodes(TestCase):
 
 
 
-  def zerosTest(self, test, rc=0,**kwargs):
-    """test with memory set to 0s; the condition register can be set independently"""
+  def zerosTest(self, test, rc=0, compInit=False, **kwargs):
+    """test with memory set to 0s; the condition register can be set independently."""
     memory = np.zeros(self.memorySize, dtype='u1')
     self.setCell('RC', rc, memory)
     test(self, memory=memory, **kwargs)
 
   def nonzerosTest(self, test, rc=0, **kwargs):
-    """set with registers containing nonzero values; the condition register can be set independently"""
+    """test with registers containing nonzero values; the condition register can be set independently"""
     memory = np.zeros(self.memorySize, dtype='u1')
     self.setCell('RC', rc, memory)
     for reg in self.parser.REGISTERS:
@@ -176,7 +175,7 @@ class TestOpcodes(TestCase):
     test(self, memory=memory, **kwargs)
 
 
-  def generateMemoryChange(self, memory, reg, val=None, expr=None):
+  def generateMemoryChange(self, memory, reg, val=None, expr=None, compInit=False):
     """Copy memory and return with register either changed to val or to expr(old register value)"""
 
     if ((val is not None) and (expr is not None)) or ((val is None) and (expr is None)):
@@ -186,24 +185,30 @@ class TestOpcodes(TestCase):
     if val is not None: self.setCell(reg, val, m)
     else: self.setCell(reg, expr(self.getCell(reg, m)), m)
 
+    if compInit: self.setCell('C1', 1, m)
+    else: self.setCell('C1', 0, m)
+
     return m
 
 
-  def assertRegisterEqual(self, memory, reg, val=None, expr=None):
+  def assertRegisterEqual(self, memory, reg, val=None, expr=None, compInit=False):
     """Assert two things:
         - reg is equal to val if given, or to expr(previous register value) if given
         - rest of memory is unchanged
+      If compInit==True, expect the test to initialise the comparison constants
     """
+    m = self.generateMemoryChange(memory, reg, val, expr, compInit)
+    np.testing.assert_array_equal(self.interpreter.memory, m)
 
-    np.testing.assert_array_equal(self.interpreter.memory, self.generateMemoryChange(memory, reg, val, expr))
-
-  def assertRegisterNotEqual(self, memory, reg, val=None, expr=None):
+  def assertRegisterNotEqual(self, memory, reg, val=None, expr=None, compInit=False):
     """Assert two things:
         - reg is not equal to val if given, or to expr(previous register value) if given
         - rest of memory is unchanged
+      If compInit==True, expect the test to initialise the comparison constants
+
     """
 
-    cm = self.generateMemoryChange(memory, reg, val, expr)
+    cm = self.generateMemoryChange(memory, reg, val, expr, compInit)
     im = self.interpreter.memory
     i = self.parser.CELLS.index(reg)
     np.testing.assert_array_equal(im[:i], cm[:i])
@@ -477,7 +482,7 @@ class TestOpcodes(TestCase):
     @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
     def GREATER_VV(self, memory, val0, val1):
       self.runBfal('GT {} {}'.format(val0, val1), memory)
-      if val0 <= val1: self.assertRegisterEqual(memory, 'RC', val=0)
+      if not val0 > val1: self.assertRegisterEqual(memory, 'RC', val=0)
       else: self.assertRegisterNotEqual(memory, 'RC', val=0)
 
     self.zerosTest(GREATER_VV)
@@ -505,7 +510,6 @@ class TestOpcodes(TestCase):
     @self.runNTimes(3)
     @self.withTestValues(lambda i: i+1, lambda j: ((j+1)**2)//2)
     def GREATER_RR(self, memory, reg0, reg1, val0, val1):
-      print(reg0, reg1, val0, val1)
       m = memory.copy()
       self.setCell(reg0, val0, m)
       self.setCell(reg1, val1, m)
@@ -516,6 +520,51 @@ class TestOpcodes(TestCase):
     self.zerosTest(GREATER_RR)
     self.zerosTest(GREATER_RR, rc=1)
     self.nonzerosTest(GREATER_RR)
+
+
+  def test_opcodes_LESSEQUAL_VV(self):
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
+    def GREATER_VV(self, memory, val0, val1):
+      self.runBfal('LE {} {}'.format(val0, val1), memory)
+      if not val0 < val1: self.assertRegisterEqual(memory, 'RC', val=0)
+      else: self.assertRegisterNotEqual(memory, 'RC', val=0)
+
+    self.zerosTest(GREATER_VV)
+    self.zerosTest(GREATER_VV, rc=1)
+    self.nonzerosTest(GREATER_VV)
+
+  def test_opcodes_LESSEQUAL_RV(self):
+    pass
+    # @self.atTestRegisters(resetCount=True)
+    # @self.runNTimes(4)
+    # @self.withTestValues(lambda i: i, lambda j: (j**2)//2)
+    # def test(self, memory, reg, val0, val1):
+    #   m = memory.copy()
+    #   self.setCell(reg, val0, m)
+    #   self.runBfal('NEQ {} {}'.format(reg, val1), m)
+    #   if val0 == val1: self.assertRegisterEqual(m, 'RC', val=0)
+    #   else: self.assertRegisterNotEqual(m, 'RC', val=0)
+    #
+    # self.zerosTest(test)
+    # self.zerosTest(test, rc=1)
+    # self.nonzerosTest(test)
+
+  def test_opcodes_LESSEQUAL_RR(self):
+    @self.atTestRegisters(nDim=2, nRegs=3, resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: i+1, lambda j: ((j+1)**2)//2)
+    def LESSEQUAL_RR(self, memory, reg0, reg1, val0, val1):
+      m = memory.copy()
+      self.setCell(reg0, val0, m)
+      self.setCell(reg1, val1, m)
+      self.runBfal('LE {} {}'.format(reg0, reg1), m)
+      if (reg0 == reg1) or (not val0 <= val1): self.assertRegisterEqual(m, 'RC', val=0, compInit=True)
+      else: self.assertRegisterNotEqual(m, 'RC', val=0, compInit=True)
+
+    self.zerosTest(LESSEQUAL_RR)
+    self.zerosTest(LESSEQUAL_RR, rc=1)
+    self.nonzerosTest(LESSEQUAL_RR)
 
 
   @patch('sys.stdin', new_callable=StringIO)

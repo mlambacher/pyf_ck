@@ -22,6 +22,8 @@ class Parser:
     ###  aliases as defined with the 'ALIAS' command
     self.ALIASES = {}
 
+    self.compInit = False
+
     self.OPCODE_CLASSES = opcodes.OPCODE_CLASSES
     self.OPCODES = opcodes.OPCODES
     self.OPCODE_IDENTIFIERS = opcodes.OPCODE_IDENTIFIERS
@@ -202,6 +204,7 @@ class Parser:
 
     bf = ''
 
+    self.compInit = False
     cfBlockEnds = []
     self.ALIASES = {}
     with makros.MakroContext(self.START_POS) as mc:
@@ -297,8 +300,7 @@ class Parser:
                   bf += '+'
 
               elif cmdType == 'RV':
-                bf += mc.set('RC', 0)
-                bf += mc.addCell('RC', arg1) + mc.dec('RC', int(arg2))
+                pass
 
               elif cmdType == 'RR':
                 bf += mc.set('RC', 0)
@@ -316,6 +318,38 @@ class Parser:
                   bf += mc.dec(arg2) + mc.inc(tx) + mc.dec(arg1) + ']'
                   bf +=  mc.moveToCell(tx) + mc.loop(mc.dec()+ mc.inc(arg1) + mc.inc(arg2) + mc.moveToCell(tx))
                   bf += mc.moveToCell('RC')
+
+
+              else: raise UnknownCmdTypeError(cmdType)
+              bf += mc.moveToCell('RC')
+
+
+            elif opcode == self.OPCODES.LESSEQUAL:
+              if cmdType == 'VV':
+                bf += mc.set('RC', 0)
+                if int(arg1) < int(arg2):
+                  bf += '+'
+
+              elif cmdType == 'RV':
+                pass
+
+              elif cmdType == 'RR':
+                if not self.compInit:
+                  self.compInit = True
+                  if bf.startswith('>>'): bf = '>>+' + bf[2:]
+                  elif bf.startswith('>'): bf = '>>+<' + bf[1:]
+                  else: bf = '>>+<<' + bf
+
+                bf += mc.set('RC', 0)
+                if arg1 != arg2:     # if registers are equal, their values are -> GT is false
+                  bf += mc.inc('RC')
+                  bf += mc.copyCell('CA', arg1)
+                  bf += mc.copyCell('CB', arg2)
+                  bf += mc.moveToCell('CA')
+                  bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
+                  bf += mc.set('CB', 0)
+
+
 
 
               else: raise UnknownCmdTypeError(cmdType)

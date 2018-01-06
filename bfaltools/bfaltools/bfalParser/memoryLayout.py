@@ -14,12 +14,12 @@ Marius Lambacher, 2017
 '''
 
 
-RESERVED = ['RC']
+COMPARISON = ['RC', 'C0', 'C1', 'C2', 'CB', 'CA']
 REGISTERS = ['R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7']
 TEMPS = ['T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 
 CELLS = []
-CELLS += RESERVED
+CELLS += COMPARISON
 for r, t in zip(REGISTERS, TEMPS):
   CELLS.append(r)
   CELLS.append(t)

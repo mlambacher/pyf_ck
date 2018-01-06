@@ -120,12 +120,12 @@ class Interpreter():
 
     line = ''
     line += cmd + '  '
-    line += ' '.join(map(lambda x: '{:>3}'.format(x), cells)) + '\n'
+    line += '  '.join(map(lambda x: '{:>3}'.format(x), cells))
     if self.memoryPtr <= self.traceWidth:
-      index = 6 + 4*self.memoryPtr
+      index = 6 + 5*self.memoryPtr
       line = line[:index] + '.' + line[index+1:]
 
-    self.trace += line
+    self.trace += line + '\n'
 
 
   def _step(self):
