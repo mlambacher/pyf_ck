@@ -320,16 +320,20 @@ class Parser:
 
             elif opcode == self.OPCODES.MUL:
               if   cmdType == 'RVV': bf += mc.set(arg1, int(arg2) * int(arg3))
-              elif cmdType == 'RRR': bf += mc.mulCell(arg1, arg2, arg3)
+              elif cmdType == 'RRV': bf += mc.mulCell(arg1, 'RV', arg2, int(arg3))
+              elif cmdType == 'RRR': bf += mc.mulCell(arg1, 'RR', arg2, arg3)
 
+              else: raise UnknownCmdTypeError(cmdType)
+
+            elif opcode == self.OPCODES.DIV:
+              if   cmdType == 'RVV': bf += mc.set(arg1, int(arg2) // int(arg3) if int(arg3) else 0)
               elif cmdType == 'RRV':
-                if arg1 == arg2:
-                  t = mc.getClosestTemp(arg1)
-                  bf += mc.copyCell(t, arg1, omit=[t,], destructive=True)
-                  bf += mc.repeat(lambda s: s.addCell(arg1, t, omit=[t,]), int(arg3))
-                  bf += mc.set(t, 0)
+                self.ensureCompInit = True
+                bf += mc.divCell(arg1, 'RV', arg2, int(arg3))
 
-                else: bf += mc.set(arg1, 0) + mc.repeat(lambda s: s.addCell(arg1, arg2), int(arg3))
+              elif cmdType == 'RRR':
+                self.ensureCompInit = True
+                bf += mc.divCell(arg1, 'RR', arg2, arg3)
 
               else: raise UnknownCmdTypeError(cmdType)
 
@@ -477,7 +481,7 @@ class Parser:
             arg1, arg2, arg3 = args
 
             if opcode == self.OPCODES.ALIAS: self.ALIASES[arg1] = arg2
-            elif opcode == self.OPCODES.PRINT: bf += mc.atTemp(mc.printText(arg1))
+            elif opcode == self.OPCODES.PRINT: bf += mc.moveToCell(mc.getClosestTemp()) + mc.printText(arg1)
 
             else: raise UnknownOpcodeError(opcode)
 

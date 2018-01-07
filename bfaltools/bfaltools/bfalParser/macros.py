@@ -15,7 +15,7 @@ with macros.MacroContext(startPos) as mc:
 
 Marius Lambacher, 2017
 """
-
+from contextlib import contextmanager
 
 from . import memoryLayout
 from .errors import *
@@ -31,12 +31,21 @@ class MacroContext():
     if temps is None: self.TEMPS = memoryLayout.TEMPS
     else: self.TEMPS = temps
 
+    self.LOCKED = []        # locked temp cells
+
 
   def __enter__(self):
     return self
 
   def __exit__(self, *exc):
     return False
+
+
+  @contextmanager
+  def lockTemp(self, cell):
+    self.LOCKED.append(cell)
+    yield cell
+    self.LOCKED.remove(cell)
 
   def getCurPos(self):
     return self._curPos
@@ -110,19 +119,18 @@ class MacroContext():
     return self.moveToCell(cell) + cmds(self)
 
 
-  def findTemp(self, cell, direction=1, omit=None):
+  def findTemp(self, cell, direction=1):
     """
     Find the temporary cell closest to cell.
     If direction >= 0; it will be the closest temp cell to the right; else to the left.
-    omit is a list of cells to be omitted; useful if one needs more temporary cells -> omit the ones already in use
+    This will exclude locked cells from the search, to enable the use of multiple temporary cells at once
 
     :param cell: cell to which to find the closest temporary cell
     :param direction: direction in which the cells are searched
-    :param omit: list of cells to omit in search
     :return: temporary cell if found, None if none is found
     """
 
-    if not omit: omit = []
+
 
     if direction >= 0:
       step = 1
@@ -132,23 +140,22 @@ class MacroContext():
       step = -1
       stop = 0
 
-    index = next((i for i in range(self.CELLS.index(cell)+step, stop, step) if (self.CELLS[i] in self.TEMPS and not self.CELLS[i] in omit)), None)
+    index = next((i for i in range(self.CELLS.index(cell)+step, stop, step) if (self.CELLS[i] in self.TEMPS and not self.CELLS[i] in self.LOCKED)), None)
 
     if index: return self.CELLS[index]
     else: return None
 
 
-  def getClosestTemp(self, cell=None, directionCell=None, omit=None):
+  def getClosestTemp(self, cell=None, directionCell=None):
     """
     Convenience call to findTemp()
     Finds a closest temp cell; closest to cell if given, else to current head position
     If directionCell is given, the temp cell will be searched in its direction; this can reduce the number of head movements
-    DirectionCell will be appended to the omits, so one can search in direction of temp cell without further consideration
+    DirectionCell will be locked, so one can search in direction of temp cell without further consideration
     If findTemp() does not yield a result, it will search in the reverse direction
 
     :param cell: cell to which to find the closest temporary cell
     :param directionCell: cell to determine the direction in which the temp cell should be searched for
-    :param omit: list of cells to omit in search
     :return: temporary cell if found, else None
     """
 
@@ -166,37 +173,12 @@ class MacroContext():
 
     direction = d-c
 
-    if not omit: omit = []
-
-    temp = self.findTemp(cell, direction, omit=[directionCell] + omit)
-    if not temp: temp = self.findTemp(cell, -direction, omit=[directionCell] + omit)
+    with self.lockTemp(directionCell):
+      temp = self.findTemp(cell, direction)
+      if not temp: temp = self.findTemp(cell, -direction)
 
     return temp
 
-
-  def moveToTemp(self, **kwargs):
-    """
-    Move to closest temp cell from current position
-    :param kwargs: omit
-    :return: brainfuck commands
-    """
-
-    return self.moveToCell(self.getClosestTemp(**kwargs))
-
-  def atTemp(self, cmds, **kwargs):
-    """
-    Will move to closest temp and add cmds
-    The commands can be either a string of bf code, or another macro
-
-    :param cmds: commands to execute at temp cell
-    :param kwargs: omit
-    :return: brainfuck commands
-    """
-    
-    cmdsOrg = cmds
-    if not callable(cmds): cmds = lambda s: cmdsOrg
-
-    return self.moveToTemp(**kwargs) + cmds(self)
 
 
   def setFromTo(self, fromVal, toVal, dest=None):
@@ -286,24 +268,27 @@ class MacroContext():
     :param cmds: cmds to be repeated
     :param dest: destination to run the commands at (allows for better temp cell search)
     :param destructive: if True, count will be set to 0 (faster, no temps required)
-    :param kwargs: omit
     :return: brainfuck commands
     """
     
     
     cmdsOrg = cmds
-    if dest is not None: cmds = lambda s: self.atCell(dest, cmdsOrg)
+    if dest is not None: cmds = lambda s: s.atCell(dest, cmdsOrg)
     elif not callable(cmds): cmds = lambda s: cmdsOrg
     
     if destructive:
       bf = self.moveToCell(count) + self.loop('-' + cmds(self) + self.moveToCell(count))
 
     else:
-      if dest is None: temp = self.getClosestTemp(count, **kwargs)
-      else: temp = self.getClosestTemp(dest, count, **kwargs)
+      if dest is None:
+        with self.lockTemp(self.getClosestTemp(cell=count)) as temp:
+          bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + cmds(self) + self.moveToCell(count))
+          bf += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
 
-      bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + self.atCell(dest, cmds(self)) + self.moveToCell(count))
-      bf += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
+      else:
+        with self.lockTemp(self.getClosestTemp(cell=dest, directionCell=count)) as temp:
+          bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + cmds(self) + self.moveToCell(count))
+          bf += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
 
     return bf
 
@@ -314,7 +299,7 @@ class MacroContext():
 
     :param dest: destination to be added to
     :param source: cell to be added to dest
-    :param kwargs: omit, destructive
+    :param kwargs: destructive
     :return: brainfuck commands
     """
 
@@ -327,33 +312,112 @@ class MacroContext():
 
     :param dest: destination to be subtracted from
     :param source: cell to be subtracted from dest
-    :param kwargs: omit, destructive
+    :param kwargs: destructive
     :return: brainfuck commands
     """
 
     return self.doCellTimes(source, self.dec(), dest=dest, **kwargs)
 
-  def mulCell(self, dest, a, b, **kwargs):
+  def mulCell(self, dest, type, a, b):
     """
-    Multiply a and b, wirte result into dest
+    Multiply a and b, write result into dest
+    a is a cell, b can be either a cell or a value
 
-    :param dest: destination to be subtracted from
+    :param dest: destination to write the result to
+    :param type: type of a and b, can be either 'RR' or 'RV'
     :param a: factor 1
     :param b: factor 2
-    :param kwargs: omit, destructive
     :return: brainfuck commands
     """
 
-    t = self.getClosestTemp(dest, b)
+    if type == 'RV':
+      cmds = lambda s: s.inc(dest, b)
+      directionCell = None
 
-    if 'omit' in kwargs.keys():
-      omit = kwargs['omit']
-      omit.append(t)
-    else: omit = [t,]
+    elif type == 'RR':
+      cmds = lambda s: s.addCell(dest, b)
+      directionCell = b
 
-    bf = self.addCell(t, a, omit=omit, destructive=False)
-    bf += self.set(dest, 0)
-    bf += self.doCellTimes(t, lambda s: s.addCell(dest, b, omit=omit), destructive=True)
+    else: raise MulMacroTypeError(type)
+
+    if dest == a or a == b:
+      with self.lockTemp(self.getClosestTemp(dest, directionCell=directionCell)) as t:
+        bf = self.addCell(t, a, destructive=False)
+        bf += self.set(dest, 0)
+        bf += self.doCellTimes(t, cmds, destructive=True)
+
+    else: bf = self.set(dest, 0) + self.doCellTimes(a, cmds, destructive=False)
+
+    return bf
+
+
+  def divCell(self, dest, type, a, b):
+    """
+    Divide a by b, write the result into dest
+
+    NOTE: a/0 is 0!
+
+    :param dest: destination to write the result to
+    :param a: dividend
+    :param b: divisor
+    :param kwargs: destructive
+    :return: brainfuck commands
+    """
+
+    if type not in ('RV', 'RR'): raise DivMacroTypeError(type)
+
+    if type=='RV' and b == 0: return self.set(dest, 0)      # division by 0
+
+    with self.lockTemp(self.getClosestTemp('CA')) as t:
+      bf = ''
+      if dest == a: bf += self.copyCell(t, a)
+      bf += self.set(dest, 0)
+
+
+      if type == 'RV':
+        bf += self.set('RC', 1)
+        if dest == a: bf += self.copyCell('CB', t, destructive=True)
+        else: bf += self.copyCell('CB', a)
+        bf += self.inc('CA', b)
+
+        bf += self.dec(dest) + self.inc('CB', b)           # compensating for executing loop at least once, cheaper than evaluating the condition beforehand
+
+        bf += self.moveToCell('RC') + '['
+
+        bf += self.inc(dest) + self.dec('CB', b)
+        bf += self.repeat(lambda s: s.ifCB(lambda s: s.inc('RC')) + s.dec('RC') + s.dec('CB') + s.inc(t), repeats=b)
+        bf += self.doCellTimes(t, lambda s: s.inc('CB'), destructive=True)
+
+        bf += self.moveToCell('RC') + ']'
+
+        bf += self.set('CA', 0)
+
+
+      else:
+        bf += self.set('RC', 0)                   # division by 0
+        bf += self.addCell('CB', b)
+        bf += self.ifCB(lambda s: s.inc('RC'))
+        bf += self.moveToCell('RC')
+        bf += '['
+
+        if a == b: bf += self.dec() + self.inc(dest)
+        else:
+          if dest == a: bf += self.copyCell('CB', t, destructive=True)
+          else: bf += self.copyCell('CB', a)
+
+          bf += self.addCell('CA', b)
+          bf += self.dec(dest) + self.addCell('CB', 'CA')   # compensating for executing loop at least once, cheaper than evaluating the condition beforehand
+
+          bf += self.moveToCell('RC')
+          bf += '[' + self.inc(dest) + self.subCell('CB', 'CA')
+          bf += self.doCellTimes('CA', lambda s: s.ifCB(lambda s: s.inc('RC')) + s.dec('RC') + s.dec('CB') + s.inc(t), destructive=True)
+          bf += self.doCellTimes(t, lambda s: s.inc('CA') + s.inc('CB'), destructive=True)
+          bf += self.moveToCell('RC') + ']'
+          bf += self.set('CA', 0)
+
+        bf += self.moveToCell('RC') + ']'
+      bf += self.set('CB', 0) + self.set(t, 0)
+
 
     return bf
 
@@ -364,7 +428,7 @@ class MacroContext():
 
     :param dest: cell to be copied to
     :param source: cell to be copied
-    :param kwargs: omit, destructive
+    :param kwargs: destructive
     :return: brainfuck commands
     """
 
@@ -399,7 +463,7 @@ class MacroContext():
     :param b: second register or value to compare
     :param compType: type of comparison, either 'RR' or 'RV'
     :param mode: comparison mode
-    :param kwargs: omit, destructive
+    :param kwargs: destructive
     :return: brainfuck commands
     """
 
@@ -425,8 +489,8 @@ class MacroContext():
 
     if mode[1] == 'T': bf += self.inc('CA')   # the test is for CA <= CB; for CA < CB, add 1 to CA
 
-    bf += self.moveToCell('CA') + '\n'
-    bf += self.doCellTimes('CA', lambda s: s.ifCB(lambda s: s.inc('RC')) + s.dec('RC') + s.dec('CB'), dest='CB', destructive=True)
+    bf += self.moveToCell('CA')
+    bf += self.doCellTimes('CA', lambda s: s.ifCB(lambda s: s.inc('RC')) + s.dec('RC') + s.dec('CB'), destructive=True)
 
     bf += self.set('CB', 0)
 

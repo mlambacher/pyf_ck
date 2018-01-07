@@ -22,6 +22,12 @@ class ComparisonMacroModeError(InternalError):
 class ComparisonMacroTypeError(InternalError):
   """Unable to determine type for comparison macro"""
 
+class MulMacroTypeError(InternalError):
+  """Unable to determine type for mul macro"""
+
+class DivMacroTypeError(InternalError):
+  """Unable to determine type for div macro"""
+
 
 class AssemblyError(Exception):
   """Error in the assembly code, clones basic Python errors"""

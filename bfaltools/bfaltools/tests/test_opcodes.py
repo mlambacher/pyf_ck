@@ -468,6 +468,8 @@ class TestOpcodes(TestCase):
     @self.skipEqualRegisters(0, 2)
     def MUL_RRR(memory, reg0, reg1, reg2, val0, val1):
       if reg1 == reg2: val1 = val0
+      #reg0, reg1, reg2, val0, val1 = 'R0', 'R1', 'R3', 4, 8
+      #print(reg0, reg1, reg2, val0, val1)
       m = memory.copy()
       self.setCell(reg1, val0, m)
       self.setCell(reg2, val1, m)
@@ -476,6 +478,48 @@ class TestOpcodes(TestCase):
 
     self.zerosTest(MUL_RRR)
     self.nonzerosTest(MUL_RRR)
+    
+  def test_opcodes_DIV_RVV(self):
+    @self.atTestRegisters(resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: 10*i if i%2 else 0, lambda j: 10*(j//2))
+    def DIV_RVV(memory, reg, val0, val1):
+      self.runBfal('DIV {} {} {}'.format(reg, val0, val1), memory)
+      self.assertRegisterEqual(memory, reg, val= val0//val1 if val1 else 0)
+
+    self.zerosTest(DIV_RVV)
+    self.zerosTest(DIV_RVV, rc=1)
+    self.nonzerosTest(DIV_RVV) 
+    
+  def test_opcodes_DIV_RRV(self):
+    @self.atTestRegisters(nDim=2, resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: 10*i if i%2 else 0, lambda j: 10*(j//2))
+    def DIV_RRV(memory, reg0, reg1, val0, val1):
+      m = memory.copy()
+      self.setCell(reg1, val0, m)
+      self.runBfal('DIV {} {} {}'.format(reg0, reg1, val1), m)
+      self.assertRegisterEqual(m, reg0, val= val0//val1 if val1 else 0, compInit=True)
+
+    self.zerosTest(DIV_RRV)
+    self.nonzerosTest(DIV_RRV)
+
+
+  def test_opcodes_DIV_RRR(self):
+    @self.atTestRegisters(nDim=3, nRegs=3, resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: 10*i if i%2 else 0, lambda j: 10*(j//2))
+    @self.skipEqualRegisters(0, 2)
+    def DIV_RRR(memory, reg0, reg1, reg2, val0, val1):
+      if reg1 == reg2: val1 = val0
+      m = memory.copy()
+      self.setCell(reg1, val0, m)
+      self.setCell(reg2, val1, m)
+      self.runBfal('DIV {} {} {}'.format(reg0, reg1, reg2), m)
+      self.assertRegisterEqual(m, reg0, val= val0//val1 if val1 else 0, compInit=True)
+
+    self.zerosTest(DIV_RRR)
+    self.nonzerosTest(DIV_RRR)
 
 
   def test_opcodes_TRUE(self):
