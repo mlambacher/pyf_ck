@@ -13,6 +13,12 @@ class UnknownCmdClassError(InternalError):
 class ErrorDetectionError(InternalError):
   """Unable to detect error in assembly"""
 
+class ComparisonMacroModeError(InternalError):
+  """Unable to determine mode for comparison macro"""
+
+class ComparisonMacroTypeError(InternalError):
+  """Unable to determine type for comparison macro"""
+
 
 class AssemblyError(Exception):
   """Error in the assembly code, clones basic Python errors"""

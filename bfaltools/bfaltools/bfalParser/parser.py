@@ -10,7 +10,7 @@ import re
 import sys
 
 from ..util import *
-from . import makros
+from . import macros
 from . import memoryLayout
 from . import opcodes
 from .errors import *
@@ -244,7 +244,7 @@ class Parser:
     self.compInit = False
     cfBlockEnds = []
     self.ALIASES = {}
-    with makros.MakroContext(self.START_POS) as mc:
+    with macros.MacroContext(self.START_POS) as mc:
       for cmd in bfal.split('\n'):
         try:
           parsed = self.parseCommand(cmd)
@@ -330,68 +330,67 @@ class Parser:
                 bf += mc.set('RC', 0)
                 if arg1 != arg2: bf += mc.addCell('RC', arg1) + mc.subCell('RC', arg2)    # if registers are equal, their values are -> NEQ is false
 
+
             elif opcode == self.OPCODES.GREATER:
               if cmdType == 'VV':
-                bf += mc.set('RC', 0)
-                if int(arg1) > int(arg2):
-                  bf += '+'
+                if int(arg1) > int(arg2): bf += mc.set('RC', 1)
+                else: bf += mc.set('RC', 0)
 
               elif cmdType == 'RV':
-                pass
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RV', arg1, int(arg2), 'GT')
 
               elif cmdType == 'RR':
-                bf += mc.set('RC', 0)
-                if arg1 != arg2:     # if registers are equal, their values are -> GT is false
-                  tx = mc.getClosestTemp('RC')
-                  ty = mc.getClosestTemp('RC', omit=[tx,])
-                  tflag = mc.getClosestTemp('RC', omit=[tx, ty])
-                  trest = mc.getClosestTemp('RC', omit=[tx, ty, tflag])
-
-                  bf += mc.moveToCell(arg1) + '['
-                  bf += mc.inc(tflag)
-                  bf += mc.moveToCell(arg2) + mc.loop(mc.dec()+ mc.set(tflag, 0) + mc.inc(trest) + mc.moveToCell(arg2))
-                  bf += mc.addCell(arg2, trest, destructive=True)
-                  bf += mc.addCell('RC', tflag, destructive=True)
-                  bf += mc.dec(arg2) + mc.inc(tx) + mc.dec(arg1) + ']'
-                  bf +=  mc.moveToCell(tx) + mc.loop(mc.dec()+ mc.inc(arg1) + mc.inc(arg2) + mc.moveToCell(tx))
-                  bf += mc.moveToCell('RC')
-
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RR', arg1, arg2, 'GT')
 
               else: raise UnknownCmdTypeError(cmdType)
               bf += mc.moveToCell('RC')
 
-
-            elif opcode == self.OPCODES.LESSEQUAL:
+            elif opcode == self.OPCODES.GREATER_EQUAL:
               if cmdType == 'VV':
-                bf += mc.set('RC', 0)
-                if int(arg1) <= int(arg2):
-                  bf += '+'
+                if int(arg1) >= int(arg2): bf += mc.set('RC', 1)
+                else: bf += mc.set('RC', 0)
 
               elif cmdType == 'RV':
-                bf = self._ensureInit(bf)
-
-                bf += mc.set('RC', 0)
-                bf += mc.inc('RC')
-                bf += mc.addCell('CA', arg1)
-                bf += mc.set('CB', int(arg2))
-                bf += mc.moveToCell('CA')
-                bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
-                bf += mc.set('CB', 0)
-
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RV', arg1, int(arg2), 'GE')
 
               elif cmdType == 'RR':
-                bf = self._ensureInit(bf)
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RR', arg1, arg2, 'GE')
 
-                bf += mc.set('RC', 0)
-                if arg1 != arg2:
-                  bf += mc.inc('RC')
-                  bf += mc.addCell('CA', arg1)
-                  bf += mc.addCell('CB', arg2)
-                  bf += mc.moveToCell('CA')
-                  bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
-                  bf += mc.set('CB', 0)
+              else: raise UnknownCmdTypeError(cmdType)
+              bf += mc.moveToCell('RC')
 
-                else: bf += mc.inc()  # if registers are equal, their values are -> LE is True
+            elif opcode == self.OPCODES.LESS:
+              if cmdType == 'VV':
+                if int(arg1) < int(arg2): bf += mc.set('RC', 1)
+                else: bf += mc.set('RC', 0)
+
+              elif cmdType == 'RV':
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RV', arg1, int(arg2), 'LT')
+
+              elif cmdType == 'RR':
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RR', arg1, arg2, 'LT')
+
+              else: raise UnknownCmdTypeError(cmdType)
+              bf += mc.moveToCell('RC')
+
+            elif opcode == self.OPCODES.LESS_EQUAL:
+              if cmdType == 'VV':
+                if int(arg1) <= int(arg2): bf += mc.set('RC', 1)
+                else: bf += mc.set('RC', 0)
+
+              elif cmdType == 'RV':
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RV', arg1, int(arg2), 'LE')
+
+              elif cmdType == 'RR':
+                bf = self._ensureCompInit(bf)
+                bf += mc.comparison('RR', arg1, arg2, 'LE')
 
               else: raise UnknownCmdTypeError(cmdType)
               bf += mc.moveToCell('RC')
@@ -452,7 +451,7 @@ class Parser:
 
 
 
-  def _ensureInit(self, bf):
+  def _ensureCompInit(self, bf):
     """Ensures that the compare section is initialised"""
 
     if not self.compInit:

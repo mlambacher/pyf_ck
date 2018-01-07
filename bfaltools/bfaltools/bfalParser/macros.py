@@ -1,27 +1,28 @@
-'''
-Makro definitions for the Brainfuck Assembly Language (BFAL)
+"""
+Macro definitions for the Brainfuck Assembly Language (BFAL)
 
-Makros are simple functions to generate or manipulate brainfuck commands.
+Macros are simple functions to generate or manipulate brainfuck commands.
 They are highly dependent on each other, generate more complex functionality.
 
-The MakroContext is used to keep track of the memory pointer's position.
+The MacroContext is used to keep track of the memory pointer's position.
 It provides the following neat syntax:
 
-with makros.MakroContext(startPos) as mc:
+with macros.MacroContext(startPos) as mc:
   mc.atTemp(mc.printText('Hello World!')
 
   endPos = mc.getCurPos()
 
 
 Marius Lambacher, 2017
-'''
+"""
 
 
 from .memoryLayout import CELLS, TEMPS
-from contextlib import ContextDecorator
+from .errors import *
+#from contextlib import ContextDecorator
 
 
-class MakroContext(ContextDecorator):
+class MacroContext():#ContextDecorator):
   def __init__(self, startPos):
     self._curPos = startPos
 
@@ -36,13 +37,13 @@ class MakroContext(ContextDecorator):
 
 
   def repeat(self, cmds, repeats):
-    '''
+    """
     Takes a command and repeats it
 
     :param cmds: command to be repeated
     :param repeats: number of repeats
     :return: bf command
-    '''
+    """
 
     if repeats < 0: raise RuntimeError('Internal error, trying to repeat a negative number of times')
     else: return cmds * repeats
@@ -50,12 +51,12 @@ class MakroContext(ContextDecorator):
 
 
   def moveToPos(self, pos):
-    '''
+    """
     Moves the head to given pos; relative to its current position
 
     :param pos: position to move to (int)
     :return: brainfuck commands to move the head
-    '''
+    """
 
     dist = pos - self._curPos
     self._curPos = pos
@@ -67,31 +68,31 @@ class MakroContext(ContextDecorator):
 
 
   def moveToCell(self, cell):
-    '''
+    """
     Moves the head to given cell by indexing it in CELLS and using moveToPos
 
     :param cell: cell to move the head to
     :return: brainfuck commands to move the head
-    '''
+    """
 
     pos = CELLS.index(cell)
     return self.moveToPos(pos)
 
 
   def atCell(self, cell, cmds=''):
-    '''
+    """
     Short for moveToCell(cell) + cmds
 
     :param cell: cell to execute commands at
     :param cmds: cmds to execute
     :return: brainfuck commands
-    '''
+    """
 
     return self.moveToCell(cell) + cmds
 
 
   def findTemp(self, cell, direction=1, omit=None):
-    '''
+    """
     Find the temporary cell closest to cell.
     If direction >= 0; it will be the closest temp cell to the right; else to the left.
     omit is a list of cells to be omitted; useful if one needs more temporary cells -> omit the ones already in use
@@ -100,7 +101,7 @@ class MakroContext(ContextDecorator):
     :param direction: direction in which the cells are searched
     :param omit: list of cells to omit in search
     :return: temporary cell if found, None if none is found
-    '''
+    """
 
     if not omit: omit = []
 
@@ -119,7 +120,7 @@ class MakroContext(ContextDecorator):
 
 
   def getClosestTemp(self, cell=None, directionCell=None, omit=None):
-    '''
+    """
     Convenience call to findTemp()
     Finds a closest temp cell; closest to cell if given, else to current head position
     If directionCell is given, the temp cell will be searched in its direction; this can reduce the number of head movements
@@ -130,7 +131,7 @@ class MakroContext(ContextDecorator):
     :param directionCell: cell to determine the direction in which the temp cell should be searched for
     :param omit: list of cells to omit in search
     :return: temporary cell if found, else None
-    '''
+    """
 
     if not cell:
       c = self._curPos
@@ -154,36 +155,36 @@ class MakroContext(ContextDecorator):
     return temp
 
 
-  def moveToTemp(self, omit=None):
-    '''
+  def moveToTemp(self, **kwargs):
+    """
     Move to closest temp cell from current position
-    :param omit: cells to omit while searching for temps
+    :param kwargs: omit
     :return: brainfuck commands
-    '''
+    """
 
-    return self.moveToCell(self.getClosestTemp(omit=omit))
+    return self.moveToCell(self.getClosestTemp(**kwargs))
 
-  def atTemp(self, cmds='', omit=None):
-    '''
+  def atTemp(self, cmds='', **kwargs):
+    """
     Will move to closest temp and add cmds
 
     :param cmds: commands to execute at temp cell
-    :param omit: cells to omit while searching for temps
+    :param kwargs: omit
     :return: brainfuck commands
-    '''
+    """
 
-    return self.moveToTemp(omit=omit) + cmds
+    return self.moveToTemp(**kwargs) + cmds
 
 
   def setFromTo(self, fromVal, toVal, dest=None):
-    '''
+    """
     Sets a cell (or current position) from a given value to another; using increment or decrement operations
 
     :param fromVal: current value of cell
     :param toVal: goal value of cell
     :param dest: cell to set
     :return: brainfuck commands
-    '''
+    """
 
     diff = toVal - fromVal
 
@@ -196,27 +197,27 @@ class MakroContext(ContextDecorator):
 
 
   def set(self, dest=None, val=0):
-    '''
+    """
     Set given cell (or current) to val
 
     :param dest: cell to set
     :param val: value to set the cell to
     :return: brainfuck commands
-    '''
+    """
 
     if not dest: return '[-]' + self.setFromTo(0, val)
     return self.atCell(cell=dest, cmds='[-]' + self.setFromTo(0, val))
 
 
   def inc(self, dest=None, val=1):
-    '''
+    """
     Increment given cell by val
     If no cell is given, increment at current position
 
     :param dest: cell to incerement
     :param val: value to increment by
     :return: brainfuck commands
-    '''
+    """
 
     cmds = self.repeat('+', val)
 
@@ -225,14 +226,14 @@ class MakroContext(ContextDecorator):
 
 
   def dec(self, dest=None, val=1):
-    '''
+    """
     Decrement given cell by val
     If no cell is given, increment at current position
 
     :param dest: cell to decerement
     :param val: value to decrement by
     :return: brainfuck commands
-    '''
+    """
 
     cmds = self.repeat('-', val)
     if not dest: return cmds
@@ -243,33 +244,33 @@ class MakroContext(ContextDecorator):
 
 
   def loop(self, cmds=''):
-    '''
+    """
     Enclose cmds by loop start and end
     :param cmds: cmds to enclose
     :return: brainfuck commands
-    '''
+    """
 
     return '[{}]'.format(cmds)
 
   
 
-  def doCellTimes(self, count, dest, cmds='', destructive=False, omit=None):
-    '''
+  def doCellTimes(self, count, dest, cmds='', destructive=False, **kwargs):
+    """
     Repeat cmds at dest as often as determined by the contents of cell count.
 
     :param count: cell which contains the number of repeats
     :param dest: cell to run the commands at
     :param cmds: cmds to be repeated
     :param destructive: if True, count will be set to 0 (faster, no temps required)
-    :param omit: cells to omit while searching for temps
+    :param kwargs: omit
     :return: brainfuck commands
-    '''
+    """
 
     if destructive:
       bf = self.moveToCell(count) + self.loop('-' + self.atCell(dest, cmds) + self.moveToCell(count))
 
     else:
-      temp = self.getClosestTemp(dest, count, omit=omit)
+      temp = self.getClosestTemp(dest, count, **kwargs)
 
       bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + self.atCell(dest, cmds) + self.moveToCell(count))
       bf += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
@@ -277,56 +278,53 @@ class MakroContext(ContextDecorator):
     return bf
 
 
-  def addCell(self, dest, source, destructive=False, omit=None):
-    '''
+  def addCell(self, dest, source, **kwargs):
+    """
     Add contents of source to dest.
 
     :param dest: destination to be added to
     :param source: cell to be added to dest
-    :param destructive: if True, source will be set to 0 (faster, no temps required)
-    :param omit: cells to omit while searching for temps
+    :param kwargs: omit, destructive
     :return: brainfuck commands
-    '''
+    """
 
-    return self.doCellTimes(source, dest, self.inc(), destructive=destructive, omit=omit)
+    return self.doCellTimes(source, dest, self.inc(), **kwargs)
 
 
-  def subCell(self, dest, source, destructive=False, omit=None):
-    '''
+  def subCell(self, dest, source, **kwargs):
+    """
     Subtractcontents of source from dest.
 
     :param dest: destination to be subtracted from
     :param source: cell to be subtracted from dest
-    :param destructive: if True, source will be set to 0 (faster, no temps required)
-    :param omit: cells to omit while searching for temps
+    :param kwargs: omit, destructive
     :return: brainfuck commands
-    '''
+    """
 
-    return self.doCellTimes(source, dest, self.dec(), destructive=destructive, omit=omit)
+    return self.doCellTimes(source, dest, self.dec(), **kwargs)
 
 
-  def copyCell(self, dest, source, destructive=False, omit=None):
-    '''
+  def copyCell(self, dest, source, **kwargs):
+    """
     Copies content of source to dest
 
     :param dest: cell to be copied to
     :param source: cell to be copied
-    :param destructive: if True, source will be set to 0 (faster, no temps required)
-    :param omit: cells to omit while searching for temps
+    :param kwargs: omit, destructive
     :return: brainfuck commands
-    '''
+    """
 
     if dest == source: return ''
-    else: return self.atCell(dest, '[-]') + self.addCell(dest, source, destructive=destructive, omit=omit)
+    else: return self.atCell(dest, '[-]') + self.addCell(dest, source, **kwargs)
 
 
   def printText(self, text):
-    '''
+    """
     Prints given text by converting its characters to unicode literals, setting a temp cell to each of them and calling the out command
 
     :param text: text to be printed
     :return: brainfuck commands
-    '''
+    """
 
     cmds = ''
     cur = 0
@@ -337,7 +335,50 @@ class MakroContext(ContextDecorator):
     cmds += '[-]'
 
     return cmds
+  
+  def comparison(self, compType, a, b, mode, **kwargs):
+    """
+    Perform a comparison of given registers
+    Mode has to be in ('LT', 'LE', 'GT', 'GE)
+    
+    :param a: first register to compare
+    :param b: second register or value to compare
+    :param compType: type of comparison, either 'RR' or 'RV'
+    :param mode: comparison mode
+    :param kwargs: omit, destructive
+    """
 
-  def withCompareInit(self, bf):
-    """Adds the initialisation of the compare registers to bf"""
+    if compType == 'RR' and a == b:   # predetermined if registers are equal
+      if mode in ('LT', 'GT'): return self.set('RC', 0)
+      if mode in ('LE', 'GE'): return self.set('RC', 1)
+
+    bf = self.set('RC', 1)
+
+    if mode[0] == 'L':
+      destA = 'CA'
+      destB = 'CB'
+
+    else:                     # switching registers for greater comparisons
+      mode = 'L' + mode[1]
+      destA = 'CB'
+      destB = 'CA'
+
+    bf += self.addCell(destA, a, **kwargs)
+    if   compType == 'RR': bf += self.addCell(destB, b, **kwargs)
+    elif compType == 'RV': bf += self.inc(destB, b)
+    else: raise ComparisonMacroTypeError(compType)
+
+    if mode[1] == 'T': bf += self.inc('CA')   # the test is for CA <= CB; for CA < CB, add 1 to CA
+
+    bf += self.moveToCell('CA')
+    bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
+    # here, the pointer is at CA again - as before, therefore the magic bit is transparent to the MacroContext
+
+    bf += self.set('CB', 0)
+
+    return bf
+
+
+    
+    
 
