@@ -13,6 +13,9 @@ class UnknownCmdClassError(InternalError):
 class ErrorDetectionError(InternalError):
   """Unable to detect error in assembly"""
 
+class RepeatMacroRepeatsError(InternalError):
+  """Trying to repeat a negative number of times"""
+
 class ComparisonMacroModeError(InternalError):
   """Unable to determine mode for comparison macro"""
 

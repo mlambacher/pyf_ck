@@ -17,14 +17,20 @@ Marius Lambacher, 2017
 """
 
 
-from .memoryLayout import CELLS, TEMPS
+from . import memoryLayout
 from .errors import *
-#from contextlib import ContextDecorator
 
 
-class MacroContext():#ContextDecorator):
-  def __init__(self, startPos):
+class MacroContext():
+  def __init__(self, startPos=0, cells=None, temps=None):
     self._curPos = startPos
+
+    if cells is None: self.CELLS = memoryLayout.CELLS
+    else: self.CELLS = cells
+
+    if temps is None: self.TEMPS = memoryLayout.TEMPS
+    else: self.TEMPS = temps
+
 
   def __enter__(self):
     return self
@@ -39,14 +45,23 @@ class MacroContext():#ContextDecorator):
   def repeat(self, cmds, repeats):
     """
     Takes a command and repeats it
+    The commands can be either a string of bf code, or another macro
 
     :param cmds: command to be repeated
     :param repeats: number of repeats
     :return: bf command
     """
 
-    if repeats < 0: raise RuntimeError('Internal error, trying to repeat a negative number of times')
-    else: return cmds * repeats
+    cmdsOrg = cmds
+    if not callable(cmds): cmds = lambda s: cmdsOrg
+
+    if repeats < 0: raise RepeatMacroRepeatsError(repeats)
+    else:
+      bf = ''
+      for i in range(repeats):
+        bf += cmds(self)
+
+      return bf
 
 
 
@@ -75,20 +90,24 @@ class MacroContext():#ContextDecorator):
     :return: brainfuck commands to move the head
     """
 
-    pos = CELLS.index(cell)
+    pos = self.CELLS.index(cell)
     return self.moveToPos(pos)
 
 
-  def atCell(self, cell, cmds=''):
+  def atCell(self, cell, cmds):
     """
     Short for moveToCell(cell) + cmds
+    The commands can be either a string of bf code, or another macro
 
     :param cell: cell to execute commands at
     :param cmds: cmds to execute
     :return: brainfuck commands
     """
 
-    return self.moveToCell(cell) + cmds
+    cmdsOrg = cmds
+    if not callable(cmds): cmds = lambda s: cmdsOrg
+
+    return self.moveToCell(cell) + cmds(self)
 
 
   def findTemp(self, cell, direction=1, omit=None):
@@ -107,15 +126,15 @@ class MacroContext():#ContextDecorator):
 
     if direction >= 0:
       step = 1
-      stop = len(CELLS)
+      stop = len(self.CELLS)
 
     else:
       step = -1
       stop = 0
 
-    index = next((i for i in range(CELLS.index(cell)+step, stop, step) if (CELLS[i] in TEMPS and not CELLS[i] in omit)), None)
+    index = next((i for i in range(self.CELLS.index(cell)+step, stop, step) if (self.CELLS[i] in self.TEMPS and not self.CELLS[i] in omit)), None)
 
-    if index: return CELLS[index]
+    if index: return self.CELLS[index]
     else: return None
 
 
@@ -135,15 +154,15 @@ class MacroContext():#ContextDecorator):
 
     if not cell:
       c = self._curPos
-      cell = CELLS[c]
+      cell = self.CELLS[c]
 
-    else: c = CELLS.index(cell)
+    else: c = self.CELLS.index(cell)
 
     if not directionCell:
       d = c+1
-      directionCell = CELLS[d]
+      directionCell = self.CELLS[d]
 
-    else:  d = CELLS.index(directionCell)
+    else:  d = self.CELLS.index(directionCell)
 
     direction = d-c
 
@@ -164,16 +183,20 @@ class MacroContext():#ContextDecorator):
 
     return self.moveToCell(self.getClosestTemp(**kwargs))
 
-  def atTemp(self, cmds='', **kwargs):
+  def atTemp(self, cmds, **kwargs):
     """
     Will move to closest temp and add cmds
+    The commands can be either a string of bf code, or another macro
 
     :param cmds: commands to execute at temp cell
     :param kwargs: omit
     :return: brainfuck commands
     """
+    
+    cmdsOrg = cmds
+    if not callable(cmds): cmds = lambda s: cmdsOrg
 
-    return self.moveToTemp(**kwargs) + cmds
+    return self.moveToTemp(**kwargs) + cmds(self)
 
 
   def setFromTo(self, fromVal, toVal, dest=None):
@@ -240,39 +263,46 @@ class MacroContext():#ContextDecorator):
     else: return self.atCell(dest, cmds)
 
 
-
-
-
-  def loop(self, cmds=''):
+  def loop(self, cmds):
     """
     Enclose cmds by loop start and end
+    The commands can be either a string of bf code, or another macro
+    
     :param cmds: cmds to enclose
     :return: brainfuck commands
     """
-
+    
+    if callable(cmds): cmds = cmds(self)
     return '[{}]'.format(cmds)
 
   
 
-  def doCellTimes(self, count, dest, cmds='', destructive=False, **kwargs):
+  def doCellTimes(self, count, cmds, dest=None, destructive=False, **kwargs):
     """
     Repeat cmds at dest as often as determined by the contents of cell count.
+    The commands can be either a string of bf code, or another macro
 
     :param count: cell which contains the number of repeats
-    :param dest: cell to run the commands at
     :param cmds: cmds to be repeated
+    :param dest: destination to run the commands at (allows for better temp cell search)
     :param destructive: if True, count will be set to 0 (faster, no temps required)
     :param kwargs: omit
     :return: brainfuck commands
     """
-
+    
+    
+    cmdsOrg = cmds
+    if dest is not None: cmds = lambda s: self.atCell(dest, cmdsOrg)
+    elif not callable(cmds): cmds = lambda s: cmdsOrg
+    
     if destructive:
-      bf = self.moveToCell(count) + self.loop('-' + self.atCell(dest, cmds) + self.moveToCell(count))
+      bf = self.moveToCell(count) + self.loop('-' + cmds(self) + self.moveToCell(count))
 
     else:
-      temp = self.getClosestTemp(dest, count, **kwargs)
+      if dest is None: temp = self.getClosestTemp(count, **kwargs)
+      else: temp = self.getClosestTemp(dest, count, **kwargs)
 
-      bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + self.atCell(dest, cmds) + self.moveToCell(count))
+      bf = self.moveToCell(count) + self.loop('-' + self.atCell(temp, '+') + self.atCell(dest, cmds(self)) + self.moveToCell(count))
       bf += self.moveToCell(temp) + self.loop('-' + self.atCell(count, '+') + self.moveToCell(temp))
 
     return bf
@@ -288,12 +318,12 @@ class MacroContext():#ContextDecorator):
     :return: brainfuck commands
     """
 
-    return self.doCellTimes(source, dest, self.inc(), **kwargs)
+    return self.doCellTimes(source, self.inc(), dest=dest, **kwargs)
 
 
   def subCell(self, dest, source, **kwargs):
     """
-    Subtractcontents of source from dest.
+    Subtract contents of source from dest.
 
     :param dest: destination to be subtracted from
     :param source: cell to be subtracted from dest
@@ -301,7 +331,31 @@ class MacroContext():#ContextDecorator):
     :return: brainfuck commands
     """
 
-    return self.doCellTimes(source, dest, self.dec(), **kwargs)
+    return self.doCellTimes(source, self.dec(), dest=dest, **kwargs)
+
+  def mulCell(self, dest, a, b, **kwargs):
+    """
+    Multiply a and b, wirte result into dest
+
+    :param dest: destination to be subtracted from
+    :param a: factor 1
+    :param b: factor 2
+    :param kwargs: omit, destructive
+    :return: brainfuck commands
+    """
+
+    t = self.getClosestTemp(dest, b)
+
+    if 'omit' in kwargs.keys():
+      omit = kwargs['omit']
+      omit.append(t)
+    else: omit = [t,]
+
+    bf = self.addCell(t, a, omit=omit, destructive=False)
+    bf += self.set(dest, 0)
+    bf += self.doCellTimes(t, lambda s: s.addCell(dest, b, omit=omit), destructive=True)
+
+    return bf
 
 
   def copyCell(self, dest, source, **kwargs):
@@ -326,15 +380,15 @@ class MacroContext():#ContextDecorator):
     :return: brainfuck commands
     """
 
-    cmds = ''
+    bf = ''
     cur = 0
     for nxt in bytearray(text.encode('Latin-1').decode('unicode-escape'), 'Latin-1'):
-      cmds += self.setFromTo(cur, nxt) + '.'
+      bf += self.setFromTo(cur, nxt) + '.'
       cur = nxt
 
-    cmds += '[-]'
+    bf += '[-]'
 
-    return cmds
+    return bf
   
   def comparison(self, compType, a, b, mode, **kwargs):
     """
@@ -346,6 +400,7 @@ class MacroContext():#ContextDecorator):
     :param compType: type of comparison, either 'RR' or 'RV'
     :param mode: comparison mode
     :param kwargs: omit, destructive
+    :return: brainfuck commands
     """
 
     if compType == 'RR' and a == b:   # predetermined if registers are equal
@@ -370,15 +425,27 @@ class MacroContext():#ContextDecorator):
 
     if mode[1] == 'T': bf += self.inc('CA')   # the test is for CA <= CB; for CA < CB, add 1 to CA
 
-    bf += self.moveToCell('CA')
-    bf += '[ <[<<<<+>>>] << [<] <->>>>->-]'  # pure magic! - not, but has an undefined position in it...
-    # here, the pointer is at CA again - as before, therefore the magic bit is transparent to the MacroContext
+    bf += self.moveToCell('CA') + '\n'
+    bf += self.doCellTimes('CA', lambda s: s.ifCB(lambda s: s.inc('RC')) + s.dec('RC') + s.dec('CB'), dest='CB', destructive=True)
 
     bf += self.set('CB', 0)
 
     return bf
 
 
-    
-    
+  def ifCB(self, cmds):
+    """
+    Execute cmds if CB is not 0
+
+    :param cmds: cmds to be executed
+    :return: brainfuck commands
+    """
+
+    bf = self.moveToCell('CB')
+    if callable(cmds): cmds = cmds(self)
+
+    bf += '[{}]<<[<]'.format(cmds + self.moveToCell('C2'))   # note: this has an undefined position in it
+    self._curPos = self.CELLS.index('C0')
+
+    return bf
 

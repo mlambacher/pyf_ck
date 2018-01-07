@@ -26,13 +26,13 @@ class TestOpcodes(TestCase):
     self.memorySize = 30000
 
     self.parser = Parser()
-    self.interpreter = Interpreter(memorySize=self.memorySize)#debugging=True)
-
+    self.interpreter = Interpreter(memorySize=self.memorySize)
 
 
   def loadBfal(self, cmds):
     """Compile and load code into self.interpreter"""
-    self.interpreter.load(self.parser.compile(cmds))
+    bf = self.parser.compile(cmds)
+    self.interpreter.load(bf)
 
   def runBfal(self, cmds, memory=None):
     """Runs given code in self.interpreter. If memory is given, it is copied into the interpreter.memory"""
@@ -51,6 +51,25 @@ class TestOpcodes(TestCase):
     self.interpreter.running = True
     while self.interpreter.running:
       self.interpreter._step()
+
+  def tracing(self, width=20):
+    """Start tracing"""
+    self.interpreter.tracing = True
+    self.interpreter.traceWidth = width
+
+  def debugBfal(self, cmds, nSteps=100, memory=None):
+    """Debug nSteps steps of cmds, useful when caught in endless loops"""
+
+    self.tracing()
+    self.interpreter.debugging=True
+
+    self.interpreter.load(self.parser.compile(cmds))
+    self.interpreter.init()
+    if memory is not None:self.interpreter.memory = memory
+
+    self.interpreter.running = True
+    for i in range(nSteps): self.interpreter.step()
+
 
   def getCell(self, cell, memory=None):
     """Syntactic sugar for getting a cell by its name; if memory is None, use self.interpreter.memory"""
@@ -156,14 +175,22 @@ class TestOpcodes(TestCase):
 
 
 
-  def zerosTest(self, test, rc=0, compInit=False, **kwargs):
+  def zerosTest(self, test, rc=0, **kwargs):
     """test with memory set to 0s; the condition register can be set independently."""
+
+    key = 'TestCount_for_{}'.format(test.__name__)
+    self.__dict__[key] = 0
+
     memory = np.zeros(self.memorySize, dtype='u1')
     self.setCell('RC', rc, memory)
     test(memory=memory, **kwargs)
 
   def nonzerosTest(self, test, rc=0, **kwargs):
     """test with registers containing nonzero values; the condition register can be set independently"""
+
+    key = 'TestCount_for_{}'.format(test.__name__)
+    self.__dict__[key] = 0
+
     memory = np.zeros(self.memorySize, dtype='u1')
     self.setCell('RC', rc, memory)
     for reg in self.parser.REGISTERS:
@@ -224,7 +251,7 @@ class TestOpcodes(TestCase):
         if t == '': name = opc.name
         else: name = '{}_{}'.format(opc.name, t.upper())
 
-        r = re.compile('.*{}'.format(name))
+        r = re.compile('test_opcodes_{}$'.format(name))
         for k in keys:
           if r.match(k): break
 
@@ -329,6 +356,18 @@ class TestOpcodes(TestCase):
 
     self.zerosTest(DEC_RR)
     self.nonzerosTest(DEC_RR)
+    
+  def test_opcodes_ADD_RVV(self):
+    @self.atTestRegisters(resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
+    def ADD_RVV(memory, reg, val0, val1):
+      self.runBfal('ADD {} {} {}'.format(reg, val0, val1), memory)
+      self.assertRegisterEqual(memory, reg, val=val0+val1)
+
+    self.zerosTest(ADD_RVV)
+    self.zerosTest(ADD_RVV, rc=1)
+    self.nonzerosTest(ADD_RVV)
 
   def test_opcodes_ADD_RRV(self):
     @self.atTestRegisters(nDim=2)
@@ -357,7 +396,18 @@ class TestOpcodes(TestCase):
 
     self.zerosTest(ADD_RRR)
     self.nonzerosTest(ADD_RRR)
+  
+  def test_opcodes_SUB_RVV(self):
+    @self.atTestRegisters(resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
+    def SUB_RVV(memory, reg, val0, val1):
+      self.runBfal('SUB {} {} {}'.format(reg, val0, val1), memory)
+      self.assertRegisterEqual(memory, reg, val=val0-val1)
 
+    self.zerosTest(SUB_RVV)
+    self.zerosTest(SUB_RVV, rc=1)
+    self.nonzerosTest(SUB_RVV)
 
   def test_opcodes_SUB_RRV(self):
     @self.atTestRegisters(nDim=2)
@@ -386,25 +436,84 @@ class TestOpcodes(TestCase):
 
     self.zerosTest(SUB_RRR)
     self.nonzerosTest(SUB_RRR)
+   
+  def test_opcodes_MUL_RVV(self):
+    @self.atTestRegisters(resetCount=True)
+    @self.runNTimes(4)
+    @self.withTestValues(lambda i: i**2, lambda j: j**2+2)
+    def MUL_RVV(memory, reg, val0, val1):
+      self.runBfal('MUL {} {} {}'.format(reg, val0, val1), memory)
+      self.assertRegisterEqual(memory, reg, val=val0*val1)
+
+    self.zerosTest(MUL_RVV)
+    self.zerosTest(MUL_RVV, rc=1)
+    self.nonzerosTest(MUL_RVV) 
+    
+  def test_opcodes_MUL_RRV(self):
+    @self.atTestRegisters(nDim=2)
+    @self.withTestValues(lambda i: i, lambda j: j*2)
+    def MUL_RRV(memory, reg0, reg1, val0, val1):
+      m = memory.copy()
+      self.setCell(reg1, val0, m)
+      self.runBfal('MUL {} {} {}'.format(reg0, reg1, val1), m)
+      self.assertRegisterEqual(m, reg0, val=val0*val1)
+
+    self.zerosTest(MUL_RRV)
+    self.nonzerosTest(MUL_RRV)
+
+
+  def test_opcodes_MUL_RRR(self):
+    @self.atTestRegisters(nDim=3, nRegs=3)
+    @self.withTestValues(lambda i: (i-1), lambda j: (j-1)*2)
+    @self.skipEqualRegisters(0, 2)
+    def MUL_RRR(memory, reg0, reg1, reg2, val0, val1):
+      if reg1 == reg2: val1 = val0
+      m = memory.copy()
+      self.setCell(reg1, val0, m)
+      self.setCell(reg2, val1, m)
+      self.runBfal('MUL {} {} {}'.format(reg0, reg1, reg2), m)
+      self.assertRegisterEqual(m, reg0, val=val0*val1)
+
+    self.zerosTest(MUL_RRR)
+    self.nonzerosTest(MUL_RRR)
 
 
   def test_opcodes_TRUE(self):
-    def TRUE(memory):
-      self.runBfal('TRUE', memory)
+    @self.runNTimes(2)
+    @self.withTestValues(lambda i: i)
+    def TRUE(memory, val):
+      m = memory.copy()
+      self.setCell('RC', val, m)
+      self.runBfal('TRUE', m)
       self.assertRegisterNotEqual(memory, 'RC', val=0)
 
     self.zerosTest(TRUE)
-    self.zerosTest(TRUE, rc=1)
     self.nonzerosTest(TRUE)
-
+    
   def test_opcodes_FALSE(self):
-    def FALSE(memory):
-      self.runBfal('FALSE', memory)
+    @self.runNTimes(2)
+    @self.withTestValues(lambda i: i)
+    def FALSE(memory, val):
+      m = memory.copy()
+      self.setCell('RC', val, m)
+      self.runBfal('FALSE', m)
       self.assertRegisterEqual(memory, 'RC', val=0)
 
     self.zerosTest(FALSE)
-    self.zerosTest(FALSE, rc=1)
     self.nonzerosTest(FALSE)
+
+  def test_opcodes_NOT(self):
+    @self.runNTimes(2)
+    @self.withTestValues(lambda i: i)
+    def NOT(memory, val):
+      m = memory.copy()
+      self.setCell('RC', val, m)
+      self.runBfal('NOT', m)
+      if val: self.assertRegisterEqual(memory, 'RC', val=0, compInit=True)
+      else: self.assertRegisterNotEqual(memory, 'RC', val=0, compInit=True)
+
+    self.zerosTest(NOT)
+    self.nonzerosTest(NOT)
 
   def test_opcodes_NOT_ZERO_V(self):
     @self.runNTimes(2)
@@ -425,9 +534,9 @@ class TestOpcodes(TestCase):
     def NOT_ZERO_R(memory, reg, val):
       m = memory.copy()
       self.setCell(reg, val, m)
-      self.runBfal('NZ {}'.format(val), m)
-      if val == 0: self.assertRegisterEqual(m, 'RC', val=0)
-      else: self.assertRegisterNotEqual(m, 'RC', val=0)
+      self.runBfal('NZ {}'.format(reg), m)
+      if val == 0: self.assertRegisterEqual(m, 'RC', val=0, compInit=True)
+      else: self.assertRegisterNotEqual(m, 'RC', val=0, compInit=True)
 
     self.zerosTest(NOT_ZERO_R)
     self.zerosTest(NOT_ZERO_R, rc=1)
@@ -453,8 +562,8 @@ class TestOpcodes(TestCase):
       m = memory.copy()
       self.setCell(reg, val0, m)
       self.runBfal('NE {} {}'.format(reg, val1), m)
-      if val0 == val1: self.assertRegisterEqual(m, 'RC', val=0)
-      else: self.assertRegisterNotEqual(m, 'RC', val=0)
+      if val0 != val1: self.assertRegisterNotEqual(m, 'RC', val=0, compInit=True)
+      else: self.assertRegisterEqual(m, 'RC', val=0, compInit=True)
 
     self.zerosTest(NOT_EQUAL_RV)
     self.zerosTest(NOT_EQUAL_RV, rc=1)
@@ -469,8 +578,8 @@ class TestOpcodes(TestCase):
       self.setCell(reg0, val0, m)
       self.setCell(reg1, val1, m)
       self.runBfal('NE {} {}'.format(reg0, reg1), m)
-      if (reg0 == reg1) or (val0 == val1): self.assertRegisterEqual(m, 'RC', val=0)
-      else: self.assertRegisterNotEqual(m, 'RC', val=0)
+      if (reg0 != reg1) and (val0 != val1): self.assertRegisterNotEqual(m, 'RC', val=0, compInit=True)
+      else: self.assertRegisterEqual(m, 'RC', val=0, compInit=True)
 
     self.zerosTest(NOT_EQUAL_RR)
     self.zerosTest(NOT_EQUAL_RR, rc=1)
@@ -697,7 +806,7 @@ class TestOpcodes(TestCase):
       self.setCell(reg0, val, m)
       self.runBfal('STZ {1}\nNZ {0}\nLOOP\nDEC {0}\nINC {1}\nNZ {0}\nENDLOOP'.format(reg0, reg1), m)
       self.setCell(reg0, 0, m)
-      self.assertRegisterEqual(m, reg1, val=val)
+      self.assertRegisterEqual(m, reg1, val=val, compInit=True)
 
     self.zerosTest(LOOP)
     self.nonzerosTest(LOOP)
@@ -718,7 +827,7 @@ class TestOpcodes(TestCase):
         self.setCell(reg0, val-1, m)
         res = 43
 
-      self.assertRegisterEqual(m, reg1, val=res)
+      self.assertRegisterEqual(m, reg1, val=res, compInit=True)
 
     self.zerosTest(IF)
     self.nonzerosTest(IF)

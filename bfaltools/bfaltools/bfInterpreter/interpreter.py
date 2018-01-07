@@ -74,6 +74,8 @@ class Interpreter():
 
     self.bufferedLine = iter([])
 
+    self.trace = ''
+
 
   def load(self, source):
     """
