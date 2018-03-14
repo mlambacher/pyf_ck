@@ -4,9 +4,9 @@ with open("README", 'r') as f:
    long_description = f.read()
 
 setup(
-    name             = 'bfaltools',
+    name             = 'pyfck',
     version          = '0.2',
-    description      = 'Brainfuck tools for python',
+    description      = 'Python for Brainfuck',
     license          = "MIT",
     long_description = long_description,
     author           = 'Marius Lambacher',
