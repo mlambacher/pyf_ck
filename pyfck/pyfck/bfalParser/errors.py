@@ -1,14 +1,27 @@
+"""
+Custom errors to be used by the bfalParser
+
+Marius Lambacher, 2018
+"""
+
 class InternalError(RuntimeError):
   """Internal error of the parser; those should not occur"""
 
+  def __init__(self, msg=''):
+    RuntimeError.__init__(self, '{}: {}'.format(self.__doc__, msg))
+
+
+class ConstantsError(InternalError):
+  """An unknown constant was encountered"""
+
 class UnknownOpcodeError(InternalError):
-  """An unknown opcode was observed while parsing"""
+  """An unknown opcode was observed """
 
 class UnknownCmdTypeError(InternalError):
-  """An unknown command type was determined while parsing"""
+  """An unknown command type was determined"""
 
 class UnknownCmdClassError(InternalError):
-  """An unknown command class was determined while parsing"""
+  """An unknown command class was determined"""
 
 class ErrorDetectionError(InternalError):
   """Unable to detect error in assembly"""
@@ -27,6 +40,18 @@ class MulMacroTypeError(InternalError):
 
 class DivMacroTypeError(InternalError):
   """Unable to determine type for div macro"""
+
+
+# class InternalWarning(Warning):
+#   """Internal warning of the parser"""
+#
+#   def __init__(self, msg=''):
+#     Warning.__init__(self, '{}: {}'.format(self.__doc__, msg))
+#
+#
+# class PostProcessWarning(InternalWarning):
+#   """PostProcess() did code cleanup, should not happen"""
+
 
 
 class AssemblyError(Exception):
@@ -50,3 +75,4 @@ class AssemblyTypeError(AssemblyError):
 class AssemblySyntaxError(AssemblyError):
   def __init__(self, *args):
     AssemblyError.__init__(self, *args, name='SyntaxError')
+

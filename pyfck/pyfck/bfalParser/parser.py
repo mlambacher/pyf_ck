@@ -32,6 +32,7 @@ class Parser:
     self.REGISTERS = memoryLayout.REGISTERS
     self.TEMPS = memoryLayout.TEMPS
     self.CELLS = memoryLayout.CELLS
+    self.CONSTANTS = memoryLayout.CONSTANTS
     self.START_POS = memoryLayout.START_POS
 
 
@@ -190,30 +191,10 @@ class Parser:
 
   def postProcess(self, bf):
     """
-    Ensure initialisation of comparison constant, if nescessary
-    Also clean up some minor things, e.g. unnecessary moves ('>>><<' -> '>') or STZ-sequences; both should not happen though!
+    Clean up some minor things, e.g. unnecessary moves ('>>><<' -> '>') or STZ-sequences
     """
 
     bfOrg = bf[:]
-
-    if self.ensureCompInit:
-      bfNew = ''
-      if bf.startswith('[-]'):
-        bfNew = '[-]'
-        bf = bf[3:]
-
-      match = re.match(r'\+*-*', bfNew)
-
-      if match.end() > 0:
-        bfNew += bf[:match.end()]
-        bf = bf[match.end():]
-
-      if bf.startswith('>>'): bfNew += '>>+' + bf[2:]
-      elif bf.startswith('>'): bfNew += '>>+<' + bf[1:]
-      else: bfNew += '>>+<<' + bf
-
-      bf = bfNew
-
 
     r = re.compile('((\[-\])+\s*)+')
     match = r.search(bf)
@@ -250,21 +231,26 @@ class Parser:
   ### parsing functions
 
 
-  def compile(self, bfal):
+  def compile(self, bfal, initConstants=True):
     '''
     Parses the given assembly to brainfuck commands.
     splits the assembly in lines / commands, parses them using parseCommand and compiles them to bf commands
 
     :param bfal: assembly input
+    :param initConstants: if True, initialise constants at the start of the program
     :return: brainfuck commands
     '''
 
+
     bf = ''
 
-    self.ensureCompInit = False
     cfBlockEnds = []
     self.ALIASES = {}
     with macros.MacroContext(startPos=self.START_POS, cells=self.CELLS, temps=self.TEMPS) as mc:
+      if initConstants:
+        for cell, val in self.CONSTANTS:
+          bf += mc.inc(cell, val)
+
       for cmd in bfal.split('\n'):
         try:
           parsed = self.parseCommand(cmd)
@@ -282,6 +268,18 @@ class Parser:
 
 
             elif opcode == self.OPCODES.STZ: bf += mc.atCell(arg1, '[-]')
+
+            elif opcode == self.OPCODES.PUSH:
+              if cmdType == 'V':
+                bf += mc.atStackEnd('+>{}<'.format(mc.inc(val=int(arg1))))
+
+              elif cmdType == 'R':
+                bf += mc.doCellTimes(arg1, lambda s: s.atStackEnd('>+<<<'))
+                bf += mc.atStackEnd('+')
+
+            elif opcode == self.OPCODES.POP:
+              bf += mc.set(arg1, 0)
+              bf += mc.atStackEnd('<[-<') + mc.atCell(arg1, mc.inc()) + mc.atStackEnd('<]<-<<')
 
             elif opcode == self.OPCODES.INPUT: bf += mc.atCell(arg1, ',')
             elif opcode == self.OPCODES.OUTPUT: bf += mc.atCell(arg1, '.')
@@ -364,6 +362,42 @@ class Parser:
                 bf += mc.set('CB', 0)
 
               else: raise UnknownCmdTypeError(cmdType)
+
+            elif opcode == self.OPCODES.ZERO:
+              if cmdType == 'V':
+                if not int(arg1): bf += mc.set('RC', 1)
+                else: bf += mc.set('RC', 0)
+
+              elif cmdType == 'R':
+                self.ensureCompInit = True
+                bf += mc.set('RC', 1)
+                bf += mc.addCell('CB', arg1)
+                bf += mc.ifCB(lambda s: s.dec('RC'))
+                bf += mc.set('CB', 0)
+
+              else: raise UnknownCmdTypeError(cmdType)
+
+
+            elif opcode == self.OPCODES.EQUAL:
+              if cmdType == 'VV':
+                if int(arg1) == int(arg2): bf += mc.set('RC', 1)
+                else: bf += mc.set('RC', 0)
+
+              elif cmdType == 'RV':
+                self.ensureCompInit = True
+                bf += mc.set('RC', 1)
+                bf += mc.addCell('CB', arg1) + mc.dec('CB', int(arg2))
+                bf += mc.ifCB(lambda s: s.dec('RC'))
+                bf += mc.set('CB', 0)
+
+              elif cmdType == 'RR':
+                self.ensureCompInit = True
+                bf += mc.set('RC', 1)
+
+                if arg1 != arg2: # if registers are equal, their values are -> EQ is true
+                  bf += mc.addCell('CB', arg1) + mc.subCell('CB', arg2)
+                  bf += mc.ifCB(lambda s: s.dec('RC'))
+                  bf += mc.set('CB', 0)
 
 
             elif opcode == self.OPCODES.NOT_EQUAL:

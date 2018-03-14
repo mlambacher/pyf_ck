@@ -14,15 +14,21 @@ Marius Lambacher, 2017
 '''
 
 
-COMPARISON = ['RC', 'C0', 'C1', 'C2', 'CB', 'CA']
-REGISTERS = ['R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7']
+COMPARISON = ['C0', 'C1', 'C2', 'CB', 'CA']
+REGISTERS = ['RC', 'R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7']
 TEMPS = ['T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+STACK = ['STACK', 'STACK0']
+
+CONSTANTS = (('C1', 1),)
 
 CELLS = []
 CELLS += COMPARISON
-for r, t in zip(REGISTERS, TEMPS):
+CELLS.append(REGISTERS[0])
+for r, t in zip(REGISTERS[1:], TEMPS):
   CELLS.append(r)
   CELLS.append(t)
+
+CELLS += STACK
 
 
 ### starting position of memory pointer

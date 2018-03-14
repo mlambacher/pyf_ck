@@ -15,6 +15,8 @@ with macros.MacroContext(startPos) as mc:
 
 Marius Lambacher, 2017
 """
+
+
 from contextlib import contextmanager
 
 from . import memoryLayout
@@ -101,6 +103,21 @@ class MacroContext():
 
     pos = self.CELLS.index(cell)
     return self.moveToPos(pos)
+
+
+  def atStackEnd(self, cmds):
+    """
+    Executes cmds at the first cell identifier which is 0
+
+    :param cmds: cmds to execute
+    :return: brainfuck commands
+    """
+
+    if callable(cmds): cmds = cmds(self)
+    bf = self.moveToCell('STACK')
+    bf += '>>[>>]{}[<<]'.format(cmds)
+
+    return bf
 
 
   def atCell(self, cell, cmds):
@@ -512,4 +529,7 @@ class MacroContext():
     self._curPos = self.CELLS.index('C0')
 
     return bf
+
+
+
 
